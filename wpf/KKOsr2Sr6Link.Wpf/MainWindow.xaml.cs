@@ -41,17 +41,16 @@ public partial class MainWindow : Window
 
     private void BuildScripterSurface()
     {
-        _overview = new OverviewEdit { Margin = new Thickness(0, 0, 0, 8) };
+        _overview = new OverviewEdit();
         _overview.CurrentLine += OnScrub;
         _overview.SetPlay += OnSetPlay;
-        ScripterStack.Children.Add(_overview);
+        SurfaceHost.Content = _overview; // Overview tab is selected by default
 
         _enables = new[] { EnL0, EnL1, EnL2, EnR0, EnR1, EnR2 };
         for (int a = 0; a < 6; a++)
         {
             int axis = a;
-            var label = new TextBlock { Text = ((Axis)a).ToString(), Width = 30 };
-            var slider = new RangeSlider { Width = 280 };
+            var slider = new RangeSlider { HorizontalAlignment = HorizontalAlignment.Stretch };
             slider.ValueChanged += () => { _engine.MinValue[axis] = slider.MinValue; _engine.MaxValue[axis] = slider.MaxValue; };
             slider.RangeChanged += () => _cfg.SetOutputRange(axis, slider.MinValue, slider.MaxValue);
             _sliders[a] = slider;
@@ -63,17 +62,63 @@ public partial class MainWindow : Window
             editor.RebuildTimes += times => Status($"rebuild requested for {times.Count} frames (regeneration not yet wired)");
             _editors[a] = editor;
 
-            var header = new StackPanel { Orientation = Orientation.Horizontal };
-            header.Children.Add(label);
-            header.Children.Add(slider);
-            ScripterStack.Children.Add(header);
-            ScripterStack.Children.Add(editor);
+            // label + slider row in the output-range card (L* left column, R* right)
+            var row = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var label = new TextBlock { Text = ((Axis)a).ToString(), VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(slider, 1);
+            row.Children.Add(label);
+            row.Children.Add(slider);
+            (a < 3 ? SliderColLeft : SliderColRight).Children.Add(row);
 
             _enables[a].Checked += (_, _) => _engine.Enabled[axis] = true;
             _enables[a].Unchecked += (_, _) => _engine.Enabled[axis] = false;
             // Persist only on user click (not the programmatic load in LoadConfigIntoUi).
             _enables[axis].Click += (_, _) => _cfg.SetAxisEnabled(axis, _enables[axis].IsChecked == true);
         }
+    }
+
+    // Overview / L0..R2 tab selection: swap the surface shown in the host.
+    private void ScripterTab_Checked(object sender, RoutedEventArgs e)
+    {
+        if (_overview == null) return; // fires once during InitializeComponent, before build
+        int tag = int.Parse((string)((RadioButton)sender).Tag);
+        FrameworkElement surface = tag < 0 ? _overview : _editors[tag];
+        SurfaceHost.Content = surface;
+        surface.InvalidateVisual();
+    }
+
+    // ponytail: the original "generates" re-derived per-part axes; that path isn't
+    // ported yet, so be honest rather than silently no-op. Wire up when needed.
+    private void Generate_Click(object s, RoutedEventArgs e)
+        => Status("generate: per-part axis regeneration not implemented yet");
+
+    // Serial device / Buttplug device tab toggle.
+    private void DeviceTab_Checked(object sender, RoutedEventArgs e)
+    {
+        if (SerialPanel == null) return; // fires during InitializeComponent, before panels exist
+        bool serial = (string)((RadioButton)sender).Tag == "serial";
+        SerialPanel.Visibility = serial ? Visibility.Visible : Visibility.Collapsed;
+        ButtplugPanel.Visibility = serial ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    // Show the axis currently mapped to the selected device feature.
+    private void FeatureList_Changed(object s, SelectionChangedEventArgs e)
+    {
+        int d = DeviceList.SelectedIndex, f = FeatureList.SelectedIndex;
+        if (d < 0 || d >= _buttplug.Devices.Count || f < 0) return;
+        AxisMapList.SelectedIndex = _buttplug.Devices[d].Feature[f];
+    }
+
+    // Map the selected feature to an axis and enable it.
+    private void AxisMap_Changed(object s, SelectionChangedEventArgs e)
+    {
+        int d = DeviceList.SelectedIndex, f = FeatureList.SelectedIndex, a = AxisMapList.SelectedIndex;
+        if (d < 0 || d >= _buttplug.Devices.Count || f < 0 || a < 0) return;
+        var dev = _buttplug.Devices[d];
+        dev.Feature[f] = a;
+        dev.FeatureEnable[f] = 1;
     }
 
     private void WireEvents()
@@ -91,7 +136,9 @@ public partial class MainWindow : Window
         _engine.Serial = _serial;
         _engine.Buttplug = _buttplug;
 
-        GirlList.SelectionChanged += (_, _) => { if (GirlList.SelectedItem is string g) _server.SendSelectChara(g); };
+        // only push the selected chara to the game when the user opted in
+        GirlList.SelectionChanged += (_, _) => { if (SelectOnSwitchCheck.IsChecked == true && GirlList.SelectedItem is string g) _server.SendSelectChara(g); };
+        BoyList.SelectionChanged += (_, _) => { if (SelectOnSwitchCheck.IsChecked == true && BoyList.SelectedItem is string b) _server.SendSelectChara(b); };
         ModeList.SelectionChanged += (_, _) => Status("mode: " + (ModeList.SelectedItem as ComboBoxItem)?.Content);
     }
 
