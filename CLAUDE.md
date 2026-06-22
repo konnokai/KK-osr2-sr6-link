@@ -51,3 +51,7 @@ Hardware outputs:
 - Filenames keep their original spelling: `range_silder` ("silder", not "slider"). Don't "fix" it — it's referenced everywhere.
 - `MainWindow` is frameless with custom drag handling (`mousePressEvent`/`mouseMoveEvent` + `m_drag`), so window-chrome behavior is manual.
 - The plugin pins very old API versions (KKAPI 1.38, Timeline 1.1, .NET 3.5) because Koikatu/BepInEx require them — do not upgrade target framework or references casually.
+- `Collect_data` samples by **programmatically seeking** the Timeline (`Timeline.Seek` one interval per `Update` frame), not by live user playback. The six axes are geometry between bone world positions, which only exist after the pose is evaluated — you can't derive them from Timeline keyframes alone.
+- Per-scan, bone `Transform`s are looked up **once** in `bone_cache` (keyed by the pair's `charas_name`, filled by `BuildBoneSet` in the `resampled` block). Don't reintroduce per-sample `GameObject.Find` in the sampling loop — it scans the whole scene 20×/sample/pair.
+- The `ReceiveClient` socket listener runs on a **background** thread, sleeps when disconnected, and treats `Receive` returning 0 as a close. Keep it from busy-waiting (no tight loop without `Thread.Sleep`).
+- `scanning_mode` only ever takes the value 0; the "bisexual" buttons are unfinished and behave identically to "normal" (no `scanning_mode == 1` branch exists).

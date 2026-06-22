@@ -37,6 +37,8 @@ namespace KK_osr2_sr6_link
         Dictionary<GameObject, String> female_charas =  new  Dictionary <GameObject, String>();
         Dictionary<GameObject, String> male_charas = new Dictionary <GameObject, String> ();
         public ConfigEntry<int> charas_num;
+        // 掃描開始時抓一次骨頭 Transform,取樣時不再每格 GameObject.Find
+        private Dictionary<string, BoneSet> bone_cache = new Dictionary<string, BoneSet>();
 
         public string female = "chaF_001";
         public GameObject femalehead;
@@ -79,42 +81,7 @@ namespace KK_osr2_sr6_link
         public bool start_sampled = false;
         public static string currentDirectory = Directory.GetCurrentDirectory().Replace("\\", "/");
 
-        private List<float> inserts = new List<float>();
-        private List<float> surges = new List<float>();
-        private List<float> sways = new List<float>();
-        private List<float> twists = new List<float>();
-        private List<float> pitchs = new List<float>();
-        private List<float> rolls = new List<float>();
         private List<double> play_times = new List<double>();
-
-
-        private List<float> blowjob_inserts = new List<float>();
-        private List<float> blowjob_surges = new List<float>();
-        private List<float> blowjob_sways = new List<float>();
-        private List<float> blowjob_twists = new List<float>();
-        private List<float> blowjob_pitchs = new List<float>();
-        private List<float> blowjob_rolls = new List<float>();
-
-        private List<float> breastsex_inserts = new List<float>();
-        private List<float> breastsex_surges = new List<float>();
-        private List<float> breastsex_sways = new List<float>();
-        private List<float> breastsex_twists = new List<float>();
-        private List<float> breastsex_pitchs = new List<float>();
-        private List<float> breastsex_rolls = new List<float>();
-
-        private List<float> handjobL_inserts = new List<float>();
-        private List<float> handjobL_surges = new List<float>();
-        private List<float> handjobL_sways = new List<float>();
-        private List<float> handjobL_twists = new List<float>();
-        private List<float> handjobL_pitchs = new List<float>();
-        private List<float> handjobL_rolls = new List<float>();
-
-        private List<float> handjobR_inserts = new List<float>();
-        private List<float> handjobR_surges = new List<float>();
-        private List<float> handjobR_sways = new List<float>();
-        private List<float> handjobR_twists = new List<float>();
-        private List<float> handjobR_pitchs = new List<float>();
-        private List<float> handjobR_rolls = new List<float>();
 
 
         public struct Action_data
@@ -240,6 +207,7 @@ namespace KK_osr2_sr6_link
             charas_num = Config.Bind("sampled setting", "charas_num", 10, "Scanning of number of charas of the same sex");
             Config.Bind("sampled setting", "Sample", "", new ConfigDescription("Click to sample sex data", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer2 }));
             clientlistener = new Thread(ReceiveClient);
+            clientlistener.IsBackground = true;
             clientlistener.Start();
         }
 
@@ -315,6 +283,11 @@ namespace KK_osr2_sr6_link
                 }
 
             }
+            
+            if (start_sampled)
+            {
+                GUILayout.Label($"掃描中 {Timeline.Timeline.playbackTime:F1}/{Timeline.Timeline.duration:F1} — 請勿手動拖動時間軸");
+            }
             GUILayout.EndVertical();
         }
 
@@ -368,29 +341,6 @@ namespace KK_osr2_sr6_link
             }
         }
 
-        public void TraverseChildren(Transform parent, string path = "")
-        {
-            foreach (Transform child in parent)
-            {
-                string childPath = path + "/" + child.name;
-                Logger.LogInfo(childPath);
-
-                TraverseChildren(child, childPath);
-            }
-        }
-        public String FindRootObjectpath(String path)
-        {
-            Transform currentTransform = GameObject.Find(path).transform;
-            path = currentTransform.name;
-            while (currentTransform.parent != null)
-            {
-                currentTransform = currentTransform.parent;
-                path = currentTransform.name + "/" + path;
-            }
-
-            return path;
-        }
-
         public string FindRootObjectPath(string rootName, string targetName)
         {
             GameObject rootObject = GameObject.Find(rootName);
@@ -421,18 +371,40 @@ namespace KK_osr2_sr6_link
             return string.Join("/", pathParts.ToArray());
         }
 
-        public float Angle(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4)
+        private class BoneSet
         {
+            public GameObject head, thightL, thightR, hips, earL, earR, mouth, breastL, breastR;
+            public GameObject hand0L, hand1L, hand2L, hand0R, hand1R, hand2R, vagina;
+            public GameObject penis, malehips, malethightL, malethightR, malehead;
+        }
 
-            Vector3 line1 = p2 - p1;
-            Vector3 line2 = p3 - p4;
-            float dotProduct = Vector3.Dot(line1.normalized, line2.normalized);
-            float angle = (float)(Math.Acos(dotProduct) * (180 / Math.PI));
-            if (angle < 0) { angle = -angle; }
-            if (angle >= 90 && angle < 180) { angle = 180 - angle; }
-            else if (angle >= 180 && angle < 270) { angle -= 180; }
-            else if (angle >= 270 && angle < 360) { angle = 180 - (angle - 180); }
-            return angle;
+        // 掃描開始呼叫一次:把一對角色用到的骨頭 Transform 全抓好,取樣迴圈不再每格搜整個場景
+        private BoneSet BuildBoneSet(string femaleRoot, string maleRoot)
+        {
+            return new BoneSet
+            {
+                head = GameObject.Find(FindRootObjectPath(femaleRoot, "cf_j_head")),
+                thightL = GameObject.Find(FindRootObjectPath(femaleRoot, "cf_j_thigh00_L")),
+                thightR = GameObject.Find(FindRootObjectPath(femaleRoot, "cf_j_thigh00_R")),
+                hips = GameObject.Find(FindRootObjectPath(femaleRoot, "cf_j_hips")),
+                earL = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_earrings_L")),
+                earR = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_earrings_R")),
+                mouth = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_mouth")),
+                breastL = GameObject.Find(FindRootObjectPath(femaleRoot, "k_f_munenipL_00")),
+                breastR = GameObject.Find(FindRootObjectPath(femaleRoot, "k_f_munenipR_00")),
+                hand0L = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_hand_L")),
+                hand1L = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_ind_L")),
+                hand2L = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_mid_L")),
+                hand0R = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_hand_R")),
+                hand1R = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_ind_R")),
+                hand2R = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_mid_R")),
+                vagina = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_kokan")),
+                penis = GameObject.Find(FindRootObjectPath(maleRoot, "a_n_dan")),
+                malehips = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_hips")),
+                malethightL = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_L")),
+                malethightR = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_R")),
+                malehead = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_head")),
+            };
         }
 
 
@@ -501,27 +473,6 @@ namespace KK_osr2_sr6_link
             return new float[] { dis, surge, sway, twist_angle, roll_angle, pitch_angle };
         }
 
-        public float[] Dis_angle_handjobR(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, Vector3 p6, Vector3 p7) //penis hand0 hand1 hand2 maleL maleR.
-        {
-
-
-            float dis = Vector3.Dot(p2 - p1, (p2 - p1).normalized);
-
-            float[] results = Get_position(p2, p1, p6, p7);//vagina,penis,maleL,maleR.
-
-            float surge = results[0];
-
-            float sway = results[1];
-
-            float twist_angle = Twist_angle(p2, p4, p1, p6, p7);
-
-
-            float roll_angle = Roll_angle(p3, p4, p6, p7);
-
-            float pitch_angle = Pitch_angle(p3, p4, p6, p7);
-
-            return new float[] { dis, surge, sway, twist_angle, roll_angle, pitch_angle };
-        }
         public float[] Get_position(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4) //vagina,penis,maleL,maleR.
         {
 
@@ -634,40 +585,6 @@ namespace KK_osr2_sr6_link
 
 
 
-        private void Clear_list()
-        {
-            inserts.Clear();
-            surges.Clear();
-            sways.Clear();
-            twists.Clear();
-            pitchs.Clear();
-            rolls.Clear();
-            play_times.Clear();
-            blowjob_inserts.Clear();
-            blowjob_surges.Clear();
-            blowjob_sways.Clear();
-            blowjob_twists.Clear();
-            blowjob_pitchs.Clear();
-            blowjob_rolls.Clear();
-            breastsex_inserts.Clear();
-            breastsex_surges.Clear();
-            breastsex_sways.Clear();
-            breastsex_twists.Clear();
-            breastsex_pitchs.Clear();
-            breastsex_rolls.Clear();
-            handjobL_inserts.Clear();
-            handjobL_surges.Clear();
-            handjobL_sways.Clear();
-            handjobL_twists.Clear();
-            handjobL_pitchs.Clear();
-            handjobL_rolls.Clear();
-            handjobR_inserts.Clear();
-            handjobR_surges.Clear();
-            handjobR_sways.Clear();
-            handjobR_twists.Clear();
-            handjobR_pitchs.Clear();
-            handjobR_rolls.Clear();
-        }
         private void Setting_range()
         {
             if (interval_time > 1 || interval_time < 0.1) { interval_time = 0.1; }
@@ -778,6 +695,7 @@ namespace KK_osr2_sr6_link
                 resampled = false;
                 last_playtime = 0;
                 action_list.Clear();
+                bone_cache.Clear();
                 foreach (KeyValuePair<GameObject, String> female_chara in female_charas)
                 {
                     foreach (KeyValuePair<GameObject, String> male_chara in male_charas)
@@ -816,6 +734,7 @@ namespace KK_osr2_sr6_link
                         data.handjobR_pitchs = new List<float>();
                         data.bodywidths = new List<float>();
                         action_list.Add(data);
+                        bone_cache[data.charas_name] = BuildBoneSet(female_chara.Key.name, male_chara.Key.name);
                     }
                 }
                 play_times.Clear();
@@ -848,47 +767,28 @@ namespace KK_osr2_sr6_link
                         {
                             if (data.charas_name == $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})" )
                             {
-                                femalehead = GameObject.Find(FindRootObjectPath(female, "cf_j_head"));
-
-                                femalethightL = GameObject.Find(FindRootObjectPath(female, "cf_j_thigh00_L"));
-
-                                femalethightR = GameObject.Find(FindRootObjectPath(female, "cf_j_thigh00_R"));
-
-                                femalehips = GameObject.Find(FindRootObjectPath(female, "cf_j_hips"));
-
-                                femaleearL = GameObject.Find(FindRootObjectPath(female, "a_n_earrings_L"));
-
-                                femaleearR = GameObject.Find(FindRootObjectPath(female, "a_n_earrings_R"));
-
-                                femalemouth = GameObject.Find(FindRootObjectPath(female, "a_n_mouth"));
-
-                                femalebreastL = GameObject.Find(FindRootObjectPath(female, "k_f_munenipL_00"));
-
-                                femalebreastR = GameObject.Find(FindRootObjectPath(female, "k_f_munenipR_00"));
-
-                                femalehand0L = GameObject.Find(FindRootObjectPath(female, "a_n_hand_L"));
-
-                                femalehand1L = GameObject.Find(FindRootObjectPath(female, "a_n_ind_L"));
-
-                                femalehand2L = GameObject.Find(FindRootObjectPath(female, "a_n_mid_L"));
-
-                                femalehand0R = GameObject.Find(FindRootObjectPath(female, "a_n_hand_R"));
-
-                                femalehand1R = GameObject.Find(FindRootObjectPath(female, "a_n_ind_R"));
-
-                                femalehand2R = GameObject.Find(FindRootObjectPath(female, "a_n_mid_R"));
-
-                                vagina = GameObject.Find(FindRootObjectPath(female, "a_n_kokan"));
-
-                                penis = GameObject.Find(FindRootObjectPath(male, "a_n_dan"));
-
-                                malehips = GameObject.Find(FindRootObjectPath(male, "cf_j_hips"));
-
-                                malethightL = GameObject.Find(FindRootObjectPath(male, "cf_j_thigh00_L"));
-
-                                malethightR = GameObject.Find(FindRootObjectPath(male, "cf_j_thigh00_R"));
-
-                                malehead = GameObject.Find(FindRootObjectPath(male, "cf_j_head"));
+                                BoneSet bs = bone_cache[data.charas_name];   // 掃描開始時已抓好,這裡不再搜場景
+                                femalehead = bs.head;
+                                femalethightL = bs.thightL;
+                                femalethightR = bs.thightR;
+                                femalehips = bs.hips;
+                                femaleearL = bs.earL;
+                                femaleearR = bs.earR;
+                                femalemouth = bs.mouth;
+                                femalebreastL = bs.breastL;
+                                femalebreastR = bs.breastR;
+                                femalehand0L = bs.hand0L;
+                                femalehand1L = bs.hand1L;
+                                femalehand2L = bs.hand2L;
+                                femalehand0R = bs.hand0R;
+                                femalehand1R = bs.hand1R;
+                                femalehand2R = bs.hand2R;
+                                vagina = bs.vagina;
+                                penis = bs.penis;
+                                malehips = bs.malehips;
+                                malethightL = bs.malethightL;
+                                malethightR = bs.malethightR;
+                                malehead = bs.malehead;
 
                                 Vector3 offset = penis.transform.position - vagina.transform.position;
 
@@ -1048,6 +948,13 @@ namespace KK_osr2_sr6_link
                     try
                     {
                         int bytesRead = clientSocket.Receive(buffer);
+                        if (bytesRead == 0)   // 對端正常關閉,別讓迴圈空轉
+                        {
+                            Logger.LogInfo("Server closed connection.");
+                            link = false;
+                            try { clientSocket.Close(); } catch { }
+                            continue;
+                        }
                         string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                         string[] get = receivedData.Split(':');
                         int way = (int)int.Parse(get[0]);
@@ -1152,7 +1059,11 @@ namespace KK_osr2_sr6_link
                             }
                         }                        
                     }
-                    catch { }
+                    catch (Exception e) { Logger.LogInfo("ReceiveClient error: " + e.Message); }
+                }
+                else
+                {
+                    Thread.Sleep(10);   // 沒連線時別空轉燒 CPU
                 }
             }
         }
@@ -1161,6 +1072,7 @@ namespace KK_osr2_sr6_link
         void OnDestroy()
         {
             end = true;
+            try { clientSocket?.Close(); } catch { }   // 踹醒卡在 Receive block 的監聽執行緒
         }
 
     }
