@@ -798,7 +798,9 @@ namespace KK_osr2_sr6_link
                                 Vector3 __vagina = (femalethightL.transform.position + femalethightR.transform.position) / 2 + offset;
 
 
-                                float dis = Vector3.Distance(penis.transform.position, vagina.transform.position);
+                                // L0 inverted at source: the app derives L0 by range-normalizing this
+                                // insert distance, so negating it flips the axis direction (out<->in).
+                                float dis = -Vector3.Distance(penis.transform.position, vagina.transform.position);
                                 float[] postiton = Get_position(vagina.transform.position, penis.transform.position, malethightL.transform.position, malethightR.transform.position);
                                 float surge = postiton[0];
                                 float sway = postiton[1];
@@ -810,25 +812,25 @@ namespace KK_osr2_sr6_link
                                 float[] breastsex = Dis_angle_breastsex(penis.transform.position, femalethightL.transform.position, femalethightR.transform.position, femalehead.transform.position, malethightL.transform.position, malethightR.transform.position, femalebreastL.transform.position, femalebreastR.transform.position);
                                 float[] handjobL = Dis_angle_handjob(penis.transform.position, femalehand0L.transform.position, femalehand1L.transform.position, femalehand2L.transform.position, malethightL.transform.position, malethightR.transform.position);
                                 float[] handjobR = Dis_angle_handjob(penis.transform.position, femalehand0R.transform.position, femalehand1R.transform.position, femalehand2R.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float blowjob_insert = blowjob[0];
+                                float blowjob_insert = -blowjob[0]; // L0 inverted at source (see dis)
                                 float blowjob_surge = blowjob[1];
                                 float blowjob_sway = blowjob[2];
                                 float blowjob_twist = blowjob[3];
                                 float blowjob_roll = blowjob[4];
                                 float blowjob_pitch = blowjob[5];
-                                float breastsex_insert = breastsex[0];
+                                float breastsex_insert = -breastsex[0]; // L0 inverted at source (see dis)
                                 float breastsex_surge = breastsex[1];
                                 float breastsex_sway = breastsex[2];
                                 float breastsex_twist = breastsex[3];
                                 float breastsex_roll = breastsex[4];
                                 float breastsex_pitch = breastsex[5];
-                                float handjobL_insert = handjobL[0];
+                                float handjobL_insert = -handjobL[0]; // L0 inverted at source (see dis)
                                 float handjobL_surge = handjobL[1];
                                 float handjobL_sway = handjobL[2];
                                 float handjobL_twist = handjobL[3];
                                 float handjobL_roll = handjobL[4];
                                 float handjobL_pitch = handjobL[5];
-                                float handjobR_insert = handjobR[0];
+                                float handjobR_insert = -handjobR[0]; // L0 inverted at source (see dis)
                                 float handjobR_surge = handjobR[1];
                                 float handjobR_sway = handjobR[2];
                                 float handjobR_twist = handjobR[3];
