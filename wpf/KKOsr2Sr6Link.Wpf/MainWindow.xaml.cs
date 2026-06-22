@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private string _filePath = "";   // resolved scene .txt path currently loaded
     private List<ScenePart> _sceneParts = new();
     private List<LovemakingData> _lovemakingDatas = new(); // raw captured streams, for "generates"
+    private bool _syncingPart; // true while pushing a part's values into the combos (suppresses write-back)
     private bool _serverRunning;
 
     public MainWindow()
@@ -195,10 +196,87 @@ public partial class MainWindow : Window
         _engine.Serial = _serial;
         _engine.Buttplug = _buttplug;
 
-        // only push the selected chara to the game when the user opted in
-        GirlList.SelectionChanged += (_, _) => { if (SelectOnSwitchCheck.IsChecked == true && GirlList.SelectedItem is string g) _server.SendSelectChara(g); };
-        BoyList.SelectionChanged += (_, _) => { if (SelectOnSwitchCheck.IsChecked == true && BoyList.SelectedItem is string b) _server.SendSelectChara(b); };
-        ModeList.SelectionChanged += (_, _) => Status("mode: " + (ModeList.SelectedItem as ComboBoxItem)?.Content);
+        // part navigation/editing (mirrors mainwindow.cpp overview_edit + combo connects)
+        _overview.SelectPart += part => PartList.SelectedIndex = part; // drives OnPartSelected
+        _overview.AddPart += OnAddPart;
+        _overview.DelPart += OnDelPart;
+        PartList.SelectionChanged += (_, _) => OnPartSelected(PartList.SelectedIndex);
+
+        GirlList.SelectionChanged += (_, _) => OnCharaChanged(GirlList);
+        BoyList.SelectionChanged += (_, _) => OnCharaChanged(BoyList);
+        ModeList.SelectionChanged += (_, _) =>
+        {
+            if (_syncingPart) return;
+            int p = PartList.SelectedIndex;
+            if (p >= 0 && p < _sceneParts.Count) _sceneParts[p].LovemakingMode = (ModeList.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "normal";
+        };
+    }
+
+    // ---------- scene parts ----------
+
+    private void OnCharaChanged(ComboBox source)
+    {
+        if (_syncingPart) return;
+        int p = PartList.SelectedIndex;
+        if (p >= 0 && p < _sceneParts.Count)
+            _sceneParts[p].Charas = (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
+        // only push to the game when the user opted in
+        if (SelectOnSwitchCheck.IsChecked == true && source.SelectedItem is string c) _server.SendSelectChara(c);
+    }
+
+    // A part was selected (by the user or the overview): reflect its mode/chara into the combos.
+    private void OnPartSelected(int part)
+    {
+        if (_overview.Values.Count == 0 || part < 0 || part >= _sceneParts.Count) return;
+        _overview.SelectedPart = part == 0 ? 0
+            : (part - 1 < _overview.SplitLines.Count ? _overview.SplitLines[part - 1] : 0);
+        _overview.InvalidateVisual();
+
+        _syncingPart = true;
+        SelectComboItem(ModeList, _sceneParts[part].LovemakingMode);
+        var charas = _sceneParts[part].Charas.Split('-');
+        if (charas.Length == 2) { GirlList.SelectedItem = charas[0]; BoyList.SelectedItem = charas[1]; }
+        _syncingPart = false;
+    }
+
+    // A new split was added in the overview: create the matching part and re-list.
+    private void OnAddPart(int part)
+    {
+        if (_overview.Values.Count == 0 || part - 1 >= _overview.SplitLines.Count) return;
+        _sceneParts.Add(new ScenePart
+        {
+            Part = _overview.SplitLines[part - 1],
+            LovemakingMode = "normal",
+            Charas = (GirlList.Items.Count > 0 ? GirlList.Items[0] : "") + "-" + (BoyList.Items.Count > 0 ? BoyList.Items[0] : ""),
+        });
+        _sceneParts.Sort((a, b) => a.Part - b.Part);
+        RebuildPartList();
+        PartList.SelectedIndex = part;
+    }
+
+    // A split was removed in the overview: drop the matching part and re-list.
+    private void OnDelPart(int part)
+    {
+        if (_overview.Values.Count == 0 || part < 0 || part >= _overview.SplitLines.Count) return;
+        int splitLine = _overview.SplitLines[part];
+        _sceneParts.RemoveAll(p => p.Part == splitLine);
+        _overview.SplitLines.RemoveAt(part);
+        _overview.InvalidateVisual();
+        RebuildPartList();
+    }
+
+    private void RebuildPartList()
+    {
+        _syncingPart = true;
+        PartList.Items.Clear();
+        for (int i = 0; i < _sceneParts.Count; i++) PartList.Items.Add("part" + (i + 1));
+        _syncingPart = false;
+    }
+
+    private static void SelectComboItem(ComboBox combo, string content)
+    {
+        foreach (var it in combo.Items)
+            if ((it as ComboBoxItem)?.Content?.ToString() == content) { combo.SelectedItem = it; return; }
     }
 
     private void LoadConfigIntoUi()
@@ -358,6 +436,10 @@ public partial class MainWindow : Window
                 // range comes from config.ini [Output Range], not the scene script
             }
             _sceneParts = SceneFiles.LoadSr6Cfg(AxisInfo.Sr6CfgPath(path));
+            // keep the raw streams around so "generates" can re-derive axes
+            _lovemakingDatas = File.Exists(path)
+                ? SceneTxtParser.Parse(File.ReadAllText(path)).Data
+                : new List<LovemakingData>();
         }
         else if (File.Exists(path))
         {
@@ -368,6 +450,7 @@ public partial class MainWindow : Window
                 Status("old-version or empty scene; re-collect with the latest plugin.");
                 return;
             }
+            _lovemakingDatas = scene.Data;
             var axes = SceneTxtParser.ComputeInitialAxes(scene.Data[0]);
             for (int a = 0; a < 6; a++) { _editors[a].Values = axes[a].Values; } // range stays as loaded from config.ini
             foreach (var d in scene.Data)
@@ -400,8 +483,8 @@ public partial class MainWindow : Window
         // overview tracks L0; split lines from parts (skip first)
         _overview.Values = _editors[0].Values;
         _overview.SplitLines = _sceneParts.Skip(1).Select(p => p.Part).ToList();
-        PartList.Items.Clear();
-        for (int i = 0; i < _sceneParts.Count; i++) PartList.Items.Add("part" + (i + 1));
+        RebuildPartList();
+        if (PartList.Items.Count > 0) PartList.SelectedIndex = 0;
 
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
         _overview.Refresh();
