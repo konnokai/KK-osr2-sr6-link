@@ -53,6 +53,7 @@ public partial class MainWindow : Window
             var label = new TextBlock { Text = ((Axis)a).ToString(), Width = 30 };
             var slider = new RangeSlider { Width = 280 };
             slider.ValueChanged += () => { _engine.MinValue[axis] = slider.MinValue; _engine.MaxValue[axis] = slider.MaxValue; };
+            slider.RangeChanged += () => _cfg.SetOutputRange(axis, slider.MinValue, slider.MaxValue);
             _sliders[a] = slider;
 
             var editor = new ScripterEdit();
@@ -70,6 +71,8 @@ public partial class MainWindow : Window
 
             _enables[a].Checked += (_, _) => _engine.Enabled[axis] = true;
             _enables[a].Unchecked += (_, _) => _engine.Enabled[axis] = false;
+            // Persist only on user click (not the programmatic load in LoadConfigIntoUi).
+            _enables[a].Click += (_, _) => _cfg.SetAxisEnabled(axis, _enables[a].IsChecked == true);
         }
     }
 
@@ -100,6 +103,15 @@ public partial class MainWindow : Window
         WebIpBox.Text = _cfg.WebServerIp;
         GameRootBox.Text = _cfg.GameRoot;
         RebuildAllCheck.IsChecked = _cfg.RebuildAllAxes;
+
+        // Per-axis output range + enable come from config.ini, not the scene scripts.
+        for (int a = 0; a < 6; a++)
+        {
+            var (min, max) = _cfg.GetOutputRange(a);
+            _sliders[a].MinValue = min;
+            _sliders[a].MaxValue = max;
+            _enables[a].IsChecked = _cfg.GetAxisEnabled(a);
+        }
 
         BaudBox.LostFocus += (_, _) => _cfg.BaudRate = BaudBox.Text;
         ServerIpBox.LostFocus += (_, _) => _cfg.ServerIp = ServerIpBox.Text;
@@ -227,7 +239,7 @@ public partial class MainWindow : Window
             {
                 var sp = SceneFiles.LoadSr6Script(AxisInfo.Sr6ScriptPath(path, (Axis)a));
                 _editors[a].Values = sp?.Values ?? new List<int>();
-                if (sp != null) { _sliders[a].MaxValue = sp.MaxValue; _sliders[a].MinValue = sp.MinValue; }
+                // range comes from config.ini [Output Range], not the scene script
             }
             _sceneParts = SceneFiles.LoadSr6Cfg(AxisInfo.Sr6CfgPath(path));
         }
@@ -241,7 +253,7 @@ public partial class MainWindow : Window
                 return;
             }
             var axes = SceneTxtParser.ComputeInitialAxes(scene.Data[0]);
-            for (int a = 0; a < 6; a++) { _editors[a].Values = axes[a].Values; _sliders[a].MinValue = 0; _sliders[a].MaxValue = 999; }
+            for (int a = 0; a < 6; a++) { _editors[a].Values = axes[a].Values; } // range stays as loaded from config.ini
             foreach (var d in scene.Data)
             {
                 var parts = d.CharasName.Split('-');

@@ -45,22 +45,60 @@ public class IniConfigTests
     }
 
     [Fact]
-    public void ServerPort_ReproducesOriginalQuirk_WriteDoesNotPersistToReadKey()
+    public void ServerPort_PersistsToServerKey()
     {
-        // Original Qt bug: reads [Server]/Serverport, writes [SerialPort]/Serverport.
+        // Original Qt bug (read [Server], write [SerialPort]) is now fixed in both apps:
+        // a port change persists to [Server]/Serverport and reads back.
         var path = TempPath();
         try
         {
             var cfg = new AppConfig(path);
             cfg.ServerPort = "9001";
+            Assert.Equal("9001", cfg.ServerPort);
 
-            // Same process: getter still reads the (unchanged) [Server] key.
-            Assert.Equal("8000", cfg.ServerPort);
-
-            // And it landed under [SerialPort] instead.
             var ini = new IniConfig(path);
-            Assert.Equal("9001", ini.Get("SerialPort", "Serverport"));
-            Assert.Equal("8000", ini.Get("Server", "Serverport"));
+            Assert.Equal("9001", ini.Get("Server", "Serverport"));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void OutputRange_RoundTrips_AndDefaults()
+    {
+        var path = TempPath();
+        try
+        {
+            var cfg = new AppConfig(path);
+            // defaults when absent
+            Assert.Equal((0, 999), cfg.GetOutputRange(0));
+
+            cfg.SetOutputRange(3, 100, 800);
+            Assert.Equal((100, 800), cfg.GetOutputRange(3));
+
+            var reload = new AppConfig(path);
+            Assert.Equal((100, 800), reload.GetOutputRange(3));
+            var ini = new IniConfig(path);
+            Assert.Equal("100", ini.Get("Output Range", "R0min"));
+            Assert.Equal("800", ini.Get("Output Range", "R0max"));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void AxisEnable_RoundTrips_AndDefaultsTrue()
+    {
+        var path = TempPath();
+        try
+        {
+            var cfg = new AppConfig(path);
+            for (int a = 0; a < 6; a++) Assert.True(cfg.GetAxisEnabled(a)); // default true
+
+            cfg.SetAxisEnabled(2, false);
+            Assert.False(cfg.GetAxisEnabled(2));
+
+            var reload = new AppConfig(path);
+            Assert.False(reload.GetAxisEnabled(2));
+            Assert.True(reload.GetAxisEnabled(0));
         }
         finally { File.Delete(path); }
     }

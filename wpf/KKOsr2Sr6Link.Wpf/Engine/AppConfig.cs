@@ -40,17 +40,15 @@ public sealed class AppConfig
     }
 
     /// <summary>
-    /// Server port. Faithfully reproduces the original quirk (mainwindow.cpp:288-296,318):
-    /// the value is READ from [Server]/Serverport but the change handler WROTE it to
-    /// [SerialPort]/Serverport. We replicate this byte-for-byte rather than "fixing" it,
-    /// so a config.ini produced by the Qt app behaves identically.
-    /// NOTE: latent bug in the original — a port change does not persist to the key that is
-    /// read back on next launch. Surface to the user before deciding whether to correct it.
+    /// Server port. The original Qt app had a bug (mainwindow.cpp:288-296,318): it READ from
+    /// [Server]/Serverport but WROTE to [SerialPort]/Serverport, so a port change never
+    /// persisted. That has since been fixed in the Qt app (write to [Server] too); we mirror
+    /// the fix here.
     /// </summary>
     public string ServerPort
     {
         get => _ini.Get("Server", "Serverport", "8000");
-        set { _ini.Set("SerialPort", "Serverport", value); _ini.Save(); }
+        set { _ini.Set("Server", "Serverport", value); _ini.Save(); }
     }
 
     public string GameRoot
@@ -69,5 +67,40 @@ public sealed class AppConfig
     {
         get => _ini.Get("Scripter edit", "rebuild all axes", "0") == "1";
         set { _ini.Set("Scripter edit", "rebuild all axes", value ? "1" : "0"); _ini.Save(); }
+    }
+
+    private static string AxisKey(int axis) => ((Axis)axis).ToString(); // 0..5 -> "L0".."R2"
+
+    /// <summary>
+    /// Per-axis output range (min/max, 0..999) under [Output Range], keys L0min/L0max … R2max.
+    /// Persisted here — NOT in the per-scene .sr6script — so the range is a device/user
+    /// preference independent of any scene. Mirrors the Qt save_output_range()/load_output_range().
+    /// </summary>
+    public (int Min, int Max) GetOutputRange(int axis)
+    {
+        string a = AxisKey(axis);
+        int min = int.TryParse(_ini.Get("Output Range", a + "min", "0"), out var lo) ? lo : 0;
+        int max = int.TryParse(_ini.Get("Output Range", a + "max", "999"), out var hi) ? hi : 999;
+        return (min, max);
+    }
+
+    public void SetOutputRange(int axis, int min, int max)
+    {
+        string a = AxisKey(axis);
+        _ini.Set("Output Range", a + "min", min.ToString());
+        _ini.Set("Output Range", a + "max", max.ToString());
+        _ini.Save();
+    }
+
+    /// <summary>
+    /// Per-axis output enable under [Axis Enable], keys L0..R2 (true/false), default true.
+    /// Mirrors the Qt save_axis_enable()/load_axis_enable().
+    /// </summary>
+    public bool GetAxisEnabled(int axis) => _ini.Get("Axis Enable", AxisKey(axis), "true") != "false";
+
+    public void SetAxisEnabled(int axis, bool enabled)
+    {
+        _ini.Set("Axis Enable", AxisKey(axis), enabled ? "true" : "false");
+        _ini.Save();
     }
 }

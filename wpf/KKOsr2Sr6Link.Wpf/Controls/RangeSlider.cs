@@ -25,6 +25,11 @@ public sealed class RangeSlider : FrameworkElement
 
     public event Action? ValueChanged;
 
+    /// <summary>Raised once on mouse release when the min or max thumb was dragged
+    /// (not the value indicator). Mirrors range_silder.cpp's rangeChanged signal —
+    /// use this to persist the range, not the per-move ValueChanged.</summary>
+    public event Action? RangeChanged;
+
     public int MaxValue { get => _maxValue; set { _maxValue = value; InvalidateVisual(); } }
     public int MinValue { get => _minValue; set { _minValue = value; InvalidateVisual(); } }
     public int Value { get => _value; set { _value = value; InvalidateVisual(); } }
@@ -99,7 +104,9 @@ public sealed class RangeSlider : FrameworkElement
 
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
+        bool rangeEdited = _select == 0 || _select == 2;
         _select = -1;
         if (IsMouseCaptured) ReleaseMouseCapture();
+        if (rangeEdited) RangeChanged?.Invoke();
     }
 }
