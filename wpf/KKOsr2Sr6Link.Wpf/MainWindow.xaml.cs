@@ -61,7 +61,7 @@ public partial class MainWindow : Window
             editor.CurrentLine += OnScrub;
             editor.SetPlay += OnSetPlay;
             editor.GetCopyValues += DistributeClipboard;
-            editor.RebuildTimes += times => Status($"rebuild requested for {times.Count} frames (regeneration not yet wired)");
+            editor.RebuildTimes += times => OnRebuildTimes(axis, times);
             _editors[a] = editor;
 
             // label + slider row in the output-range card (L* left column, R* right)
@@ -138,6 +138,59 @@ public partial class MainWindow : Window
         }
         _overview.Values = _editors[0].Values;
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
+        _overview.Refresh();
+    }
+
+    // "rebuild selected times" from an axis editor: re-derive the selected frames from the
+    // current chara/mode raw streams. RebuildAllCheck => all six axes, else just the sender axis.
+    // Mirrors mainwindow.cpp update_list (1939-2086).
+    private void OnRebuildTimes(int axis, List<int> times)
+    {
+        if (times.Count == 0 || _editors[0].Values.Count == 0) return;
+        string charas = (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
+        var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == charas);
+        if (d == null) { Status("rebuild: no raw data for " + charas); return; }
+        string mode = (ModeList.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "normal";
+        var (ins, su, sw, tw, ro, pi) = SourceStreams(d, mode);
+        if (ins.Count == 0) return;
+
+        bool all = RebuildAllCheck.IsChecked == true;
+        int len = _editors[0].Values.Count;
+        var idx = times.Where(t => t >= 0 && t < ins.Count && t < len).ToList();
+        if (idx.Count == 0) return;
+
+        if (all) foreach (var ed in _editors) ed.RecordUndo();
+        else _editors[axis].RecordUndo();
+
+        // offsets/range come from the selected frames only (not the whole part)
+        float insMax = float.MinValue, insMin = float.MaxValue, surgeSum = 0, swaySum = 0;
+        foreach (var t in idx)
+        {
+            if (ins[t] > insMax) insMax = ins[t];
+            if (ins[t] < insMin) insMin = ins[t];
+            surgeSum += su[t]; swaySum += sw[t];
+        }
+        float crange = insMin - insMax;
+        float surgeOffset = surgeSum / idx.Count, swayOffset = swaySum / idx.Count, bw = d.BodyWidth;
+
+        foreach (var t in idx)
+        {
+            int[] v =
+            {
+                Clamp(crange == 0 ? 0 : (int)((999f / crange) * ins[t] - (999f / crange) * insMax)),
+                Clamp(bw == 0 ? 500 : 999 / 2 - (int)((su[t] - surgeOffset) * 999f / bw / 2f)),
+                Clamp(bw == 0 ? 500 : 999 / 2 - (int)((sw[t] - swayOffset) * 999f / bw / 2f)),
+                Clamp(999 / 2 + (int)(tw[t] * 11.1f)),
+                Clamp(999 / 2 - (int)(ro[t] * 11.1f)),
+                Clamp(999 / 2 + (int)(pi[t] * 11.1f / 2f)),
+            };
+            if (all) for (int a = 0; a < 6; a++) _editors[a].Values[t] = v[a];
+            else _editors[axis].Values[t] = v[axis];
+        }
+
+        if (all) for (int a = 0; a < 6; a++) _editors[a].Refresh();
+        else _editors[axis].Refresh();
+        _overview.Values = _editors[0].Values;
         _overview.Refresh();
     }
 

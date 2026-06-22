@@ -84,6 +84,9 @@ public sealed class ScripterEdit : FrameworkElement
 
     private void PushUndo(List<int> snapshot) => _undo.Add(new List<int>(snapshot));
 
+    /// <summary>Snapshot current values for undo (used before an external rebuild).</summary>
+    public void RecordUndo() => PushUndo(Values);
+
     private double Y(int value) => (ActualHeight - _valueEdge * 2 - Pad * 2) / -999.0 * value + ActualHeight - _valueEdge - Pad;
     private int X(int i) => _valueEdge + Intervals * i + Pad;
 
