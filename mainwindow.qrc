@@ -12,7 +12,6 @@
         <file>icons/cil-align-left.png</file>
         <file>icons/cil-align-right.png</file>
         <file>icons/cil-arrow-bottom.png</file>
-        <file>icons/cil-arrow-bottom-2.png</file>
         <file>icons/cil-arrow-circle-bottom.png</file>
         <file>icons/cil-arrow-circle-left.png</file>
         <file>icons/cil-arrow-circle-right.png</file>
@@ -57,7 +56,6 @@
         <file>icons/cil-chevron-double-left.png</file>
         <file>icons/cil-chevron-double-right.png</file>
         <file>icons/cil-chevron-double-up.png</file>
-        <file>icons/cil-chevron-double-up-alt.png</file>
         <file>icons/cil-chevron-left.png</file>
         <file>icons/cil-chevron-right.png</file>
         <file>icons/cil-chevron-top.png</file>
@@ -123,7 +121,6 @@
         <file>icons/cil-history.png</file>
         <file>icons/cil-home.png</file>
         <file>icons/cil-house.png</file>
-        <file>icons/cil-image1.png</file>
         <file>icons/cil-image-plus.png</file>
         <file>icons/cil-infinity.png</file>
         <file>icons/cil-input.png</file>
@@ -178,7 +175,6 @@
         <file>icons/cil-mug-tea.png</file>
         <file>icons/cil-notes.png</file>
         <file>icons/cil-options.png</file>
-        <file>icons/cil-options-horizontal.png</file>
         <file>icons/cil-paint-bucket.png</file>
         <file>icons/cil-paperclip.png</file>
         <file>icons/cil-paper-plane.png</file>
@@ -193,7 +189,6 @@
         <file>icons/cil-print.png</file>
         <file>icons/cil-rectangle.png</file>
         <file>icons/cil-reload.png</file>
-        <file>icons/cil-remove.png</file>
         <file>icons/cil-rss.png</file>
         <file>icons/cil-satelite.png</file>
         <file>icons/cil-save.png</file>
@@ -204,7 +199,6 @@
         <file>icons/cil-share-boxed.png</file>
         <file>icons/cil-signal-cellular-0.png</file>
         <file>icons/cil-signal-cellular-3.png</file>
-        <file>icons/cil-size-grip.png</file>
         <file>icons/cil-smile.png</file>
         <file>icons/cil-speaker.png</file>
         <file>icons/cil-speech.png</file>
@@ -249,12 +243,6 @@
         <file>icons/cil-x-circle.png</file>
         <file>icons/cil-zoom-in.png</file>
         <file>icons/cil-zoom-out.png</file>
-        <file>icons/icon_close.png</file>
-        <file>icons/icon_maximize.png</file>
-        <file>icons/icon_menu.png</file>
-        <file>icons/icon_minimize.png</file>
-        <file>icons/icon_restore.png</file>
-        <file>icons/icon_settings.png</file>
         <file>icons/rebuild.png</file>
         <file>icons/rebuild0.png</file>
         <file>icons/rebuild1.png</file>
