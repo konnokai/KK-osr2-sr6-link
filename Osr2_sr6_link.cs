@@ -17,6 +17,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using UnityEngine;
+using UnityEngine.UI;
 using static KK_osr2_sr6_link.Osr2_sr6_link;
 
 
@@ -26,7 +27,7 @@ namespace KK_osr2_sr6_link
 {
 
 
-    [BepInPlugin("org.bepinex.plugins.osr2_sr6_link", "Osr2_sr6_link", "3.0.0")]
+    [BepInPlugin("org.bepinex.plugins.osr2_sr6_link", "Osr2_sr6_link", "4.0.0")]
     [BepInProcess("CharaStudio")]
     public class Osr2_sr6_link : BaseUnityPlugin
     {
@@ -198,7 +199,7 @@ namespace KK_osr2_sr6_link
         void Start()
         {
             Harmony.CreateAndPatchAll(typeof(Osr2_sr6_link));
-            Logger.LogInfo("KK osr2 sr6 link start");
+            Logger.LogInfo("KKS osr2 sr6 link start");
             server_ip = Config.Bind("link setting", "Server IP", "127.0.0.1", "input app server ip");
             server_port = Config.Bind("link setting", "Server port", 8000, "input app server port id");
             link_interval = Config.Bind("link setting", "relink interval", 5000, "setting relink time(Millisecond)");

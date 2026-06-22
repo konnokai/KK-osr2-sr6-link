@@ -72,7 +72,7 @@ public partial class MainWindow : Window
             _enables[a].Checked += (_, _) => _engine.Enabled[axis] = true;
             _enables[a].Unchecked += (_, _) => _engine.Enabled[axis] = false;
             // Persist only on user click (not the programmatic load in LoadConfigIntoUi).
-            _enables[a].Click += (_, _) => _cfg.SetAxisEnabled(axis, _enables[a].IsChecked == true);
+            _enables[axis].Click += (_, _) => _cfg.SetAxisEnabled(axis, _enables[axis].IsChecked == true);
         }
     }
 
@@ -210,7 +210,17 @@ public partial class MainWindow : Window
         {
             string previewPath = path.Replace("KK_osr_sr6_link", "Studio/scene").Replace(".txt", ".png");
             if (File.Exists(previewPath))
-                ScenePreview.Source = new BitmapImage(new Uri(previewPath));
+            {
+                // OnLoad reads the whole image now and releases the file handle,
+                // instead of streaming lazily and keeping the .png locked.
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                bmp.UriSource = new Uri(previewPath);
+                bmp.EndInit();
+                ScenePreview.Source = bmp;
+            }
         }
         catch { /* preview is best-effort */ }
 
@@ -412,10 +422,9 @@ public partial class MainWindow : Window
 
     private static void FillCombo(ComboBox combo, IEnumerable<string> items)
     {
-        var existing = combo.Items.Cast<object>().Select(o => o?.ToString()).ToHashSet();
-        foreach (var it in items.Distinct())
-            if (!existing.Contains(it)) combo.Items.Add(it);
-        if (combo.Items.Count > 0 && combo.SelectedIndex < 0) combo.SelectedIndex = 0;
+        combo.Items.Clear(); // drop the previous scene's chars before refilling
+        foreach (var it in items.Distinct()) combo.Items.Add(it);
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
     }
 
     private void Status(string text) => StatusBar.Text = text;

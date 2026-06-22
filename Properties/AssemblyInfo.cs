@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // 控制。更改这些特性值可修改
 // 与程序集关联的信息。
 [assembly: AssemblyTitle("kk_osr2_sr6_link")]
-[assembly: AssemblyDescription("https://github.com/qinyan-alpha/KK-osr2-sr6-link/tree/main")]
+[assembly: AssemblyDescription("https://github.com/konnokai/KK-osr2-sr6-link")]
 [assembly: AssemblyConfiguration("org.bepinex.plugins.osr2_sr6_link.cfg")]
 [assembly: AssemblyCompany("qinyan-alpha")]
 [assembly: AssemblyProduct("kk_osr2_sr6_link")]
-[assembly: AssemblyCopyright("Copyright © qinyan-alpha 2024")]
+[assembly: AssemblyCopyright("Copyright © qinyan-alpha 2026")]
 [assembly: AssemblyTrademark("kk_osr2_sr6_link")]
 [assembly: AssemblyCulture("")]
 
@@ -33,5 +33,5 @@ using System.Runtime.InteropServices;
 //可以指定所有这些值，也可以使用“生成号”和“修订号”的默认值
 //通过使用 "*"，如下所示:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("4.0.0.0")]
+[assembly: AssemblyFileVersion("4.0.0.0")]

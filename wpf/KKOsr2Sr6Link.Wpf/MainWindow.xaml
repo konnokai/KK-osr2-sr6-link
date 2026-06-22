@@ -91,7 +91,7 @@
                     <WrapPanel Grid.Row="0" Margin="0,0,0,6">
                         <TextBlock Text="Mode" VerticalAlignment="Center" Margin="0,0,4,0"/>
                         <ComboBox x:Name="ModeList" Width="110" Margin="0,0,12,0">
-                            <ComboBoxItem>normal</ComboBoxItem>
+                            <ComboBoxItem IsSelected="True">normal</ComboBoxItem>
                             <ComboBoxItem>blowjob</ComboBoxItem>
                             <ComboBoxItem>breastsex</ComboBoxItem>
                             <ComboBoxItem>handjobL</ComboBoxItem>
