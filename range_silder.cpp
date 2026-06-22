@@ -88,6 +88,7 @@ void Range_Silder::mouseMoveEvent(QMouseEvent *event)
 
 void Range_Silder::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (select_value == 0 || select_value == 2){ emit rangeChanged(); }
     select_value = -1;
 }
 

@@ -127,6 +127,13 @@ void MainWindow::ui_init(){
     ui->R0_silder->layout()->addWidget(silderR0);
     ui->R1_silder->layout()->addWidget(silderR1);
     ui->R2_silder->layout()->addWidget(silderR2);
+    connect(silderL0, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    connect(silderL1, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    connect(silderL2, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    connect(silderR0, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    connect(silderR1, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    connect(silderR2, &Range_Silder::rangeChanged, this, &MainWindow::save_output_range);
+    load_output_range();
     ui->Ov_widget->layout()->addWidget(overview_edit);
     ui->L0_widget_2->layout()->addWidget(scripter3L0);
     ui->L1_widget_2->layout()->addWidget(scripter3L1);
@@ -286,7 +293,7 @@ void MainWindow::config_init(){
     });
     connect(ui->Port, &QLineEdit::textChanged, this, [=] {
         if (ui->Port->text().toInt() >= 0 && ui->Port->text().toInt() <= 9999) {
-            settings->beginGroup("SerialPort");
+            settings->beginGroup("Server");
             settings->setValue("Serverport", ui->Port->text());
             settings->endGroup();
         }
@@ -301,7 +308,7 @@ void MainWindow::config_init(){
     connect(ui->webserver_ip, &QLineEdit::textChanged, this, [=] {
         intiface_central_ip = ui->webserver_ip->text();
     });
-    connect(ui->rebuild_all_checkbox, &QCheckBox::isChecked, this, [=] {
+    connect(ui->rebuild_all_checkbox, &QCheckBox::clicked, this, [=] {
         if(ui->rebuild_all_checkbox->isChecked()){
             settings->beginGroup("Scripter edit");
             settings->setValue("rebuild all axes", "1");
@@ -423,6 +430,7 @@ void MainWindow::btn_init(){
     //New 3
     connect(ui->scripter_part_list, &QComboBox::currentIndexChanged, this, [=](int part) {
         if (overview_edit->values.count()){
+            if (part < 0 || part >= sceneParts.count()){return;}
             if (part == 0){
                 overview_edit->selected_part = 0;
             }
@@ -441,8 +449,10 @@ void MainWindow::btn_init(){
         }
     });
     connect(ui->girl_list, &QComboBox::currentIndexChanged, this, [=]{
-        sceneParts[ui->scripter_part_list->currentIndex()].charas = ui->girl_list->currentText() + "-" + ui->boy_list->currentText();
-        if (ui->select_chara_combobox->isChecked()){            
+        int _pi = ui->scripter_part_list->currentIndex();
+        if (_pi < 0 || _pi >= sceneParts.count()){return;}
+        sceneParts[_pi].charas = ui->girl_list->currentText() + "-" + ui->boy_list->currentText();
+        if (ui->select_chara_combobox->isChecked()){
             if (allowriter){
                 try {
                     socket->write("2:"+ui->girl_list->currentText().toLocal8Bit());
@@ -455,8 +465,10 @@ void MainWindow::btn_init(){
         }
     });
     connect(ui->boy_list, &QComboBox::currentIndexChanged, this, [=]{
-        sceneParts[ui->scripter_part_list->currentIndex()].charas = ui->girl_list->currentText() + "-" + ui->boy_list->currentText();
-        if (ui->select_chara_combobox->isChecked()){            
+        int _pi = ui->scripter_part_list->currentIndex();
+        if (_pi < 0 || _pi >= sceneParts.count()){return;}
+        sceneParts[_pi].charas = ui->girl_list->currentText() + "-" + ui->boy_list->currentText();
+        if (ui->select_chara_combobox->isChecked()){
             if (allowriter){
                 try {
                     socket->write("2:"+ui->boy_list->currentText().toLocal8Bit());
@@ -469,7 +481,9 @@ void MainWindow::btn_init(){
         }
     });
     connect(ui->lovemaking_mode_list, &QComboBox::currentIndexChanged, this, [=]{
-        sceneParts[ui->scripter_part_list->currentIndex()].lovemaking_mode = ui->lovemaking_mode_list->currentText();
+        int _pi = ui->scripter_part_list->currentIndex();
+        if (_pi < 0 || _pi >= sceneParts.count()){return;}
+        sceneParts[_pi].lovemaking_mode = ui->lovemaking_mode_list->currentText();
     });
     connect(ui->creaet_btn, &QPushButton::clicked, this, [=]{
         if (overview_edit->values.count()){
@@ -486,6 +500,7 @@ void MainWindow::btn_init(){
             if (i == sceneParts.count()-1) {partend = inserts.count();}else{partend = sceneParts[i+1].part;}
             for (Lovemaking_data lovemaking_data:lovemaking_datas){
                 if (lovemaking_data.charas_name == sceneParts[i].charas){
+                    bodywidth = lovemaking_data.bodywidth;
                     if (sceneParts[i].lovemaking_mode == "normal"){
                         for (int i = partbegin; i < partend; ++i) {
                             inserts[i] = lovemaking_data.inserts[i];
@@ -550,7 +565,7 @@ void MainWindow::btn_init(){
                             _rolls.append(handjobL_rolls[i]);
                         }
                     }
-                    else if (sceneParts[i].lovemaking_mode == "handjob(Detecting girl right hand))"){
+                    else if (sceneParts[i].lovemaking_mode == "handjob(Detecting girl right hand)"){
                         for (int i = partbegin; i < partend; ++i) {
                             handjobR_inserts[i] = lovemaking_data.handjobR_inserts[i];
                             handjobR_surges[i] = lovemaking_data.handjobR_surges[i];
@@ -569,16 +584,17 @@ void MainWindow::btn_init(){
                     if (_inserts.isEmpty()){return;}
                     float rebuild_insert_max = *std::max_element(_inserts.begin(), _inserts.end());
                     float rebuild_insert_min = *std::min_element(_inserts.begin(), _inserts.end());
+                    float crange = rebuild_insert_min - rebuild_insert_max;
                     float surge_sum = std::accumulate(_surges.begin(), _surges.end(), 0.0f);
                     float surge_offset = surge_sum / _surges.count();
                     float sway_sum = std::accumulate(_sways.begin(), _sways.end(), 0.0f);
                     float sway_offset = sway_sum / _sways.count();
                     for (int i = 0; i < _inserts.count(); ++i){
-                        int L0 = (999 / (rebuild_insert_min - rebuild_insert_max))*_inserts[i] - (999 / (rebuild_insert_min - rebuild_insert_max))*rebuild_insert_max;
+                        int L0 = (crange == 0) ? 0 : (int)((999 / crange)*_inserts[i] - (999 / crange)*rebuild_insert_max);
                         if (L0 < 0){L0 = 0;}else if (L0 > 999){L0 = 999;}
-                        int L1 = (999-0)/2 - (int)((_surges[i] - surge_offset) * (999-0) / bodywidth / 2);
+                        int L1 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((_surges[i] - surge_offset) * (999-0) / bodywidth / 2);
                         if (L1 < 0){L1 = 0;}else if (L1 > 999){L1 = 999;}
-                        int L2 = (999-0)/2 - (int)((_sways[i] - sway_offset) * (999-0) / bodywidth / 2);
+                        int L2 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((_sways[i] - sway_offset) * (999-0) / bodywidth / 2);
                         if (L2 < 0){L2 = 0;}else if (L2 > 999){L2 = 999;}
                         int R0 = (999-0)/2 + (int)(_twists[i] * 11.1);
                         if (R0 < 0){R0 = 0;}else if (R0 > 999){R0 = 999;}
@@ -680,19 +696,14 @@ void MainWindow::btn_init(){
     connect(ui->convert_btn, &QPushButton::clicked, this, [=]{
         if (file_path != ""){
             save_scripter();
-            QString get_path = file_path;
-            get_path = get_path.replace(".txt",".funscript");
-            convertsr6sToFunscript(L0s, get_path);
-            get_path = get_path.replace(".funscript",".surge.funscript");
-            convertsr6sToFunscript(L1s, get_path);
-            get_path = get_path.replace(".sway.funscript",".surge.funscript");
-            convertsr6sToFunscript(L2s, get_path);
-            get_path = get_path.replace(".surge.funscript",".twist.funscript");
-            convertsr6sToFunscript(R0s, get_path);
-            get_path = get_path.replace(".twist.funscript",".roll.funscript");
-            convertsr6sToFunscript(R1s, get_path);
-            get_path = get_path.replace(".roll.funscript",".pitch.funscript");
-            convertsr6sToFunscript(R2s, get_path);
+            QString base = file_path;
+            base = base.replace(".txt","");
+            convertsr6sToFunscript(L0s, base + ".funscript");
+            convertsr6sToFunscript(L1s, base + ".surge.funscript");
+            convertsr6sToFunscript(L2s, base + ".sway.funscript");
+            convertsr6sToFunscript(R0s, base + ".twist.funscript");
+            convertsr6sToFunscript(R1s, base + ".roll.funscript");
+            convertsr6sToFunscript(R2s, base + ".pitch.funscript");
         }
     });
     //
@@ -767,7 +778,7 @@ void MainWindow::btn_init(){
     last_L1 = L1;
     last_L2 = L2;
     last_R0 = R0;
-    last_R1 = L1;
+    last_R1 = R1;
     last_R2 = R2;
     insert_max = 0;
     insert_min = 0;
@@ -920,7 +931,8 @@ void MainWindow::server_read(){
                         lovemaking_data.inserts = {};lovemaking_data.surges = {};lovemaking_data.sways = {};lovemaking_data.twists = {};lovemaking_data.pitchs = {};lovemaking_data.rolls = {};
                         lovemaking_data.blowjob_inserts = {};lovemaking_data.blowjob_surges = {};lovemaking_data.blowjob_sways = {};lovemaking_data.blowjob_twists = {};lovemaking_data.blowjob_pitchs = {};lovemaking_data.blowjob_rolls = {};
                         lovemaking_data.breastsex_inserts = {};lovemaking_data.breastsex_surges = {};lovemaking_data.breastsex_sways = {};lovemaking_data.breastsex_twists = {};lovemaking_data.breastsex_pitchs = {};lovemaking_data.breastsex_rolls = {};
-                        lovemaking_data.handjobL_inserts = {};lovemaking_data.handjobL_surges = {};lovemaking_data.handjobL_sways = {};lovemaking_data.handjobL_twists = {};lovemaking_data.pitchs = {};lovemaking_data.rolls = {};
+                        lovemaking_data.handjobL_inserts = {};lovemaking_data.handjobL_surges = {};lovemaking_data.handjobL_sways = {};lovemaking_data.handjobL_twists = {};lovemaking_data.handjobL_pitchs = {};lovemaking_data.handjobL_rolls = {};
+                        lovemaking_data.handjobR_inserts = {};lovemaking_data.handjobR_surges = {};lovemaking_data.handjobR_sways = {};lovemaking_data.handjobR_twists = {};lovemaking_data.handjobR_pitchs = {};lovemaking_data.handjobR_rolls = {};
                         lovemaking_data.charas_name = line;
                         lovemaking_datas.append(lovemaking_data);
                         continue;
@@ -967,6 +979,7 @@ void MainWindow::server_read(){
                 twists = lovemaking_datas[0].twists;
                 rolls = lovemaking_datas[0].rolls;
                 pitchs = lovemaking_datas[0].pitchs;
+                bodywidth = lovemaking_datas[0].bodywidth;
                 if (inserts.isEmpty()){return;}
                 insert_max = *std::max_element(inserts.begin(), inserts.end());
                 insert_min = *std::min_element(inserts.begin(), inserts.end());
@@ -974,19 +987,20 @@ void MainWindow::server_read(){
                 float sway_sum = std::accumulate(sways.begin(), sways.end(), 0.0f);
                 surge_offset = surge_sum / surges.count();
                 sway_offset = sway_sum / sways.count();
+                float insert_range = insert_min - insert_max;
                 for (int i = 0; i < inserts.count(); ++i){
-                    L0 = (999 / (insert_min - insert_max))*inserts[i] - (999 / (insert_min - insert_max))*insert_max;
+                    L0 = (insert_range == 0) ? 0 : (int)((999 / insert_range)*inserts[i] - (999 / insert_range)*insert_max);
                     if (L0 < 0){L0 = 0;}else if (L0 > 999){L0 = 999;}
                     L0s.append(L0);
-                    L1 = (999-0)/2 - (int)((surges[i] - surge_offset) * (999-0) / bodywidth / 2);
+                    L1 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((surges[i] - surge_offset) * (999-0) / bodywidth / 2);
                     if (L1 < 0){L1 = 0;}else if (L1 > 999){L1 = 999;}
                     L1s.append(L1);
-                    L2 = (999-0)/2 - (int)((sways[i] - sway_offset) * (999-0) / bodywidth / 2);
+                    L2 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((sways[i] - sway_offset) * (999-0) / bodywidth / 2);
                     if (L2 < 0){L2 = 0;}else if (L2 > 999){L2 = 999;}
                     L2s.append(L2);
+                    R0 = (999-0)/2 + (int)(twists[i] * 11.1);
                     if (R0 < 0){R0 = 0;}else if (R0 > 999){R0 = 999;}
                     R0s.append(R0);
-                    R0 = (999-0)/2 + (int)(twists[i] * 11.1);
                     R1 = (999+0)/2 - (int)(rolls[i] * 11.1);
                     if (R1 < 0){R1 = 0;}else if (R1 > 999){R1 = 999;}
                     R1s.append(R1);
@@ -1005,6 +1019,10 @@ void MainWindow::server_read(){
                 R0s.clear();
                 R1s.clear();
                 R2s.clear();
+                delete scripter_L0; delete scripter_L1; delete scripter_L2;
+                delete scripter_R0; delete scripter_R1; delete scripter_R2;
+                scripter_L0 = nullptr; scripter_L1 = nullptr; scripter_L2 = nullptr;
+                scripter_R0 = nullptr; scripter_R1 = nullptr; scripter_R2 = nullptr;
                 scripter_L0 = new QFile(get_path);
                 scripter_L0->open(QIODevice::ReadWrite);
                 QJsonDocument loadDocL0(QJsonDocument::fromJson(scripter_L0->readAll()));
@@ -1020,8 +1038,6 @@ void MainWindow::server_read(){
                         L0s.append(value);
 
                     }
-                    silderL0->maxvalue = config_L0["maxvalue"].toInt();
-                    silderL0->minvalue = config_L0["minvalue"].toInt();
                 }
                 scripter_L0->close();
                 get_path = get_path.replace(".sr6script",".surge.sr6script");
@@ -1039,8 +1055,6 @@ void MainWindow::server_read(){
                         int value = actions[i].toInt();
                         L1s.append(value);
                     }
-                    silderL1->maxvalue = config_L1["maxvalue"].toInt();
-                    silderL1->minvalue = config_L1["minvalue"].toInt();
                 }
                 scripter_L1->close();
                 get_path = get_path.replace(".surge.sr6script",".sway.sr6script");
@@ -1058,8 +1072,6 @@ void MainWindow::server_read(){
                         int value = actions[i].toInt();
                         L2s.append(value);
                     }
-                    silderL2->maxvalue = config_L2["maxvalue"].toInt();
-                    silderL2->minvalue = config_L2["minvalue"].toInt();
                 }
                 scripter_L2->close();
                 get_path = get_path.replace(".sway.sr6script",".twist.sr6script");
@@ -1073,8 +1085,6 @@ void MainWindow::server_read(){
                         int value = actions[i].toInt();
                         R0s.append(value);
                     }
-                    silderR0->maxvalue = config_R0["maxvalue"].toInt();
-                    silderR0->minvalue = config_R0["minvalue"].toInt();
                 }
                 scripter_R0->close();
                 get_path = get_path.replace(".twist.sr6script",".roll.sr6script");
@@ -1088,8 +1098,6 @@ void MainWindow::server_read(){
                         int value = actions[i].toInt();
                         R1s.append(value);
                     }
-                    silderR1->maxvalue = config_R1["maxvalue"].toInt();
-                    silderR1->minvalue = config_R1["minvalue"].toInt();
                 }
                 scripter_R1->close();
                 get_path = get_path.replace(".roll.sr6script",".pitch.sr6script");
@@ -1098,19 +1106,18 @@ void MainWindow::server_read(){
                 QJsonDocument loadDocR2(QJsonDocument::fromJson(scripter_R2->readAll()));
                 config_R2 = loadDocR2.object();
                 if (config_R2.contains("actions") && config_R2["actions"].isArray()) {
-                    QJsonArray actions = config_R1["actions"].toArray();
+                    QJsonArray actions = config_R2["actions"].toArray();
                     for (int i = 0; i < actions.size(); ++i) {
                         int value = actions[i].toInt();
                         R2s.append(value);
                     }
-                    silderR2->maxvalue = config_R2["maxvalue"].toInt();
-                    silderR2->minvalue = config_R2["minvalue"].toInt();
                 }
                 scripter_R2->close();
                 get_path = get_path.replace(".pitch.sr6script",".sr6cfg");
-                scence = new QFile(get_path);
-                scence->open(QIODevice::ReadWrite);
-                QJsonDocument loadDoc = QJsonDocument::fromJson(scence->readAll());
+                QFile scenceFile(get_path);
+                scenceFile.open(QIODevice::ReadWrite);
+                QJsonDocument loadDoc = QJsonDocument::fromJson(scenceFile.readAll());
+                scenceFile.close();
                 QJsonArray sceneArray = loadDoc.array();
                 if (!loadDoc.isArray()) {
                     qWarning() << "File content is not a JSON array!";
@@ -1310,7 +1317,7 @@ void MainWindow::server_read(){
                     break;
                 }
             }
-            if (L2!=-1 && last_L1 != L2 && ui->L2->isChecked()){
+            if (L2!=-1 && last_L2 != L2 && ui->L2->isChecked()){
                 last_L2 = L2;
                 if (SerialPort_link){
                     try{
@@ -1451,21 +1458,18 @@ void MainWindow::server_disconnected(){
 
 void MainWindow::run_btn_clicked(){
     if(!build_server){
-        try {
-            qDebug() << "wait for client link";
-            qDebug() << server_ip;
-            qDebug() << port;
-            server->listen(QHostAddress(server_ip),quint16(port));
+        if (server->listen(QHostAddress(server_ip),quint16(port))) {
             build_server = true;
             ui->run_btn->setStyleSheet(btn_sty3);
             ui->wait_for_client_link->setText("wait for client link");
-        } catch (...) {
+        } else {
             socket->abort();
             server->close();
             ui->run_btn->setStyleSheet(btn_sty4);
             ui->run_btn->setEnabled(false);
             tips->setText("build server fail,check other available port");
             tips_window_start();
+            timer1.start();
         }
     }
     else{
@@ -1566,12 +1570,14 @@ void MainWindow::link_btn_clicked(){
 void MainWindow::handleSerialError(QSerialPort::SerialPortError error)
 {
     if (error == QSerialPort::NoError) {
+        return;
+    }
+    if (SerialPort_link) {
         ser->close();
         ui->link_btn->setStyleSheet(btn_sty5);
         tips->setText("Serial close");
         tips_window_start();
         SerialPort_link = false;
-        return;
     }
 }
 
@@ -1585,6 +1591,12 @@ void MainWindow::save_scripter()
     R2s = scripter3R2 ->values;
     QString get_path = file_path;
     get_path = get_path.replace(".txt",".sr6script");
+    delete scripter_L0; delete scripter_L1; delete scripter_L2;
+    delete scripter_R0; delete scripter_R1; delete scripter_R2;
+    delete scence;
+    scripter_L0 = nullptr; scripter_L1 = nullptr; scripter_L2 = nullptr;
+    scripter_R0 = nullptr; scripter_R1 = nullptr; scripter_R2 = nullptr;
+    scence = nullptr;
     scripter_L0 = new QFile(get_path);
     config_L0 =  QJsonObject();
     QJsonArray Array_L0;
@@ -1592,10 +1604,6 @@ void MainWindow::save_scripter()
         Array_L0.append(value);
     }
     config_L0["actions"] = Array_L0;
-    config_L0["maxvalue"] = 999;
-    config_L0["minvalue"] = 0;
-    silderL0->maxvalue = config_L0["maxvalue"].toInt();
-    silderL0->minvalue = config_L0["minvalue"].toInt();
     QJsonDocument documentL0(config_L0);
     if (scripter_L0->open(QIODevice::WriteOnly)) {
         scripter_L0->write(documentL0.toJson(QJsonDocument::Indented));
@@ -1609,10 +1617,6 @@ void MainWindow::save_scripter()
         Array_L1.append(value);
     }
     config_L1["actions"] = Array_L1;
-    config_L1["maxvalue"] = 999;
-    config_L1["minvalue"] = 0;
-    silderL1->maxvalue = config_L1["maxvalue"].toInt();
-    silderL1->minvalue = config_L1["minvalue"].toInt();
     QJsonDocument documentL1(config_L1);
     if (scripter_L1->open(QIODevice::WriteOnly)) {
         scripter_L1->write(documentL1.toJson(QJsonDocument::Indented));
@@ -1626,10 +1630,6 @@ void MainWindow::save_scripter()
         Array_L2.append(value);
     }
     config_L2["actions"] = Array_L2;
-    config_L2["maxvalue"] = 999;
-    config_L2["minvalue"] = 0;
-    silderL2->maxvalue = config_L2["maxvalue"].toInt();
-    silderL2->minvalue = config_L2["minvalue"].toInt();
     QJsonDocument documentL2(config_L2);
     if (scripter_L2->open(QIODevice::WriteOnly)) {
         scripter_L2->write(documentL2.toJson(QJsonDocument::Indented));
@@ -1643,10 +1643,6 @@ void MainWindow::save_scripter()
         Array_R0.append(value);
     }
     config_R0["actions"] = Array_R0;
-    config_R0["maxvalue"] = 999;
-    config_R0["minvalue"] = 0;
-    silderR0->maxvalue = config_R0["maxvalue"].toInt();
-    silderR0->minvalue = config_R0["minvalue"].toInt();
     QJsonDocument documentR0(config_R0);
     if (scripter_R0->open(QIODevice::WriteOnly)) {
         scripter_R0->write(documentR0.toJson(QJsonDocument::Indented));
@@ -1660,10 +1656,6 @@ void MainWindow::save_scripter()
         Array_R1.append(value);
     }
     config_R1["actions"] = Array_R1;
-    config_R1["maxvalue"] = 999;
-    config_R1["minvalue"] = 0;
-    silderR1->maxvalue = config_R1["maxvalue"].toInt();
-    silderR1->minvalue = config_R1["minvalue"].toInt();
     QJsonDocument documentR1(config_R1);
     if (scripter_R1->open(QIODevice::WriteOnly)) {
         scripter_R1->write(documentR1.toJson(QJsonDocument::Indented));
@@ -1677,10 +1669,6 @@ void MainWindow::save_scripter()
         Array_R2.append(value);
     }
     config_R2["actions"] = Array_R2;
-    config_R2["maxvalue"] = 999;
-    config_R2["minvalue"] = 0;
-    silderR2->maxvalue = config_R2["maxvalue"].toInt();
-    silderR2->minvalue = config_R2["minvalue"].toInt();
     QJsonDocument documentR2(config_R2);
     if (scripter_R2->open(QIODevice::WriteOnly)) {
         scripter_R2->write(documentR2.toJson(QJsonDocument::Indented));
@@ -1704,6 +1692,28 @@ void MainWindow::save_scripter()
 
 }
 
+
+void MainWindow::save_output_range(){
+    settings->beginGroup("Output Range");
+    settings->setValue("L0min", silderL0->minvalue); settings->setValue("L0max", silderL0->maxvalue);
+    settings->setValue("L1min", silderL1->minvalue); settings->setValue("L1max", silderL1->maxvalue);
+    settings->setValue("L2min", silderL2->minvalue); settings->setValue("L2max", silderL2->maxvalue);
+    settings->setValue("R0min", silderR0->minvalue); settings->setValue("R0max", silderR0->maxvalue);
+    settings->setValue("R1min", silderR1->minvalue); settings->setValue("R1max", silderR1->maxvalue);
+    settings->setValue("R2min", silderR2->minvalue); settings->setValue("R2max", silderR2->maxvalue);
+    settings->endGroup();
+}
+
+void MainWindow::load_output_range(){
+    settings->beginGroup("Output Range");
+    silderL0->minvalue = settings->value("L0min", 0).toInt(); silderL0->maxvalue = settings->value("L0max", 999).toInt();
+    silderL1->minvalue = settings->value("L1min", 0).toInt(); silderL1->maxvalue = settings->value("L1max", 999).toInt();
+    silderL2->minvalue = settings->value("L2min", 0).toInt(); silderL2->maxvalue = settings->value("L2max", 999).toInt();
+    silderR0->minvalue = settings->value("R0min", 0).toInt(); silderR0->maxvalue = settings->value("R0max", 999).toInt();
+    silderR1->minvalue = settings->value("R1min", 0).toInt(); silderR1->maxvalue = settings->value("R1max", 999).toInt();
+    silderR2->minvalue = settings->value("R2min", 0).toInt(); silderR2->maxvalue = settings->value("R2max", 999).toInt();
+    settings->endGroup();
+}
 
 void MainWindow::list_clear(){
     inserts.clear();
@@ -1746,7 +1756,71 @@ void MainWindow::list_clear(){
 
 void MainWindow::regenerate_scripter()
 {
-
+    // ponytail: re-derive all six axes for every scene part from the captured raw
+    // data, honouring each part's chara + lovemaking mode (same math as "create").
+    if (overview_edit->values.isEmpty()){return;}
+    for (int p = 0; p < sceneParts.count(); ++p){
+        int partbegin = sceneParts[p].part;
+        int partend = (p == sceneParts.count()-1) ? inserts.count() : sceneParts[p+1].part;
+        for (const Lovemaking_data& d : lovemaking_datas){
+            if (d.charas_name != sceneParts[p].charas){continue;}
+            const QString& mode = sceneParts[p].lovemaking_mode;
+            const QList<float>* in = &d.inserts;  const QList<float>* su = &d.surges;
+            const QList<float>* sw = &d.sways;    const QList<float>* tw = &d.twists;
+            const QList<float>* ro = &d.rolls;    const QList<float>* pi = &d.pitchs;
+            if (mode == "blowjob"){
+                in=&d.blowjob_inserts; su=&d.blowjob_surges; sw=&d.blowjob_sways;
+                tw=&d.blowjob_twists; ro=&d.blowjob_rolls; pi=&d.blowjob_pitchs;
+            } else if (mode == "breastsex"){
+                in=&d.breastsex_inserts; su=&d.breastsex_surges; sw=&d.breastsex_sways;
+                tw=&d.breastsex_twists; ro=&d.breastsex_rolls; pi=&d.breastsex_pitchs;
+            } else if (mode == "handjob(Detecting girl left hand)"){
+                in=&d.handjobL_inserts; su=&d.handjobL_surges; sw=&d.handjobL_sways;
+                tw=&d.handjobL_twists; ro=&d.handjobL_rolls; pi=&d.handjobL_pitchs;
+            } else if (mode == "handjob(Detecting girl right hand)"){
+                in=&d.handjobR_inserts; su=&d.handjobR_surges; sw=&d.handjobR_sways;
+                tw=&d.handjobR_twists; ro=&d.handjobR_rolls; pi=&d.handjobR_pitchs;
+            }
+            if (partend > in->count()){partend = in->count();}
+            if (partend > L0s.count()){partend = L0s.count();}
+            int n = partend - partbegin;
+            if (n <= 0){break;}
+            QList<float> seg;
+            for (int i = partbegin; i < partend; ++i){ seg.append((*in)[i]); }
+            float seg_max = *std::max_element(seg.begin(), seg.end());
+            float seg_min = *std::min_element(seg.begin(), seg.end());
+            float crange = seg_min - seg_max;
+            float surge_sum = 0, sway_sum = 0;
+            for (int i = partbegin; i < partend; ++i){ surge_sum += (*su)[i]; sway_sum += (*sw)[i]; }
+            float surge_offset = surge_sum / n;
+            float sway_offset  = sway_sum  / n;
+            float bw = d.bodywidth;
+            for (int i = partbegin; i < partend; ++i){
+                int L0 = (crange == 0) ? 0 : (int)((999/crange)*(*in)[i] - (999/crange)*seg_max);
+                if (L0 < 0){L0 = 0;}else if (L0 > 999){L0 = 999;}
+                int L1 = (bw == 0) ? 500 : 999/2 - (int)(((*su)[i]-surge_offset)*999/bw/2);
+                if (L1 < 0){L1 = 0;}else if (L1 > 999){L1 = 999;}
+                int L2 = (bw == 0) ? 500 : 999/2 - (int)(((*sw)[i]-sway_offset)*999/bw/2);
+                if (L2 < 0){L2 = 0;}else if (L2 > 999){L2 = 999;}
+                int R0 = 999/2 + (int)((*tw)[i]*11.1);
+                if (R0 < 0){R0 = 0;}else if (R0 > 999){R0 = 999;}
+                int R1 = 999/2 - (int)((*ro)[i]*11.1);
+                if (R1 < 0){R1 = 0;}else if (R1 > 999){R1 = 999;}
+                int R2 = 999/2 + (int)((*pi)[i]*11.1/2);
+                if (R2 < 0){R2 = 0;}else if (R2 > 999){R2 = 999;}
+                L0s[i] = L0; L1s[i] = L1; L2s[i] = L2;
+                R0s[i] = R0; R1s[i] = R1; R2s[i] = R2;
+            }
+            break;
+        }
+    }
+    scripter3L0->values = L0s; scripter3L1->values = L1s; scripter3L2->values = L2s;
+    scripter3R0->values = R0s; scripter3R1->values = R1s; scripter3R2->values = R2s;
+    overview_edit->values = L0s;
+    scripter3L0->update(); scripter3L1->update(); scripter3L2->update();
+    scripter3R0->update(); scripter3R1->update(); scripter3R2->update();
+    overview_edit->update();
+    this->update();
 }
 
 void MainWindow::copy_values(QList<int> values,QList<int> index)
@@ -1925,19 +1999,20 @@ void MainWindow::update_list(QObject* sender,int way,QList<int> rebuild_times){
         }
         float rebuild_insert_max = *std::max_element(rebuild_inserts.begin(), rebuild_inserts.end());
         float rebuild_insert_min = *std::min_element(rebuild_inserts.begin(), rebuild_inserts.end());
-        float surge_sum = *std::max_element(rebuild_surges.begin(), rebuild_surges.end());
+        float crange = rebuild_insert_min - rebuild_insert_max;
+        float surge_sum = std::accumulate(rebuild_surges.begin(), rebuild_surges.end(), 0.0f);
         float surge_offset = surge_sum / rebuild_surges.count();
-        float sway_sum = *std::max_element(rebuild_sways.begin(), rebuild_sways.end());
+        float sway_sum = std::accumulate(rebuild_sways.begin(), rebuild_sways.end(), 0.0f);
         float sway_offset = sway_sum / rebuild_sways.count();
 
         for (int i = 0; i < rebuild_inserts.count(); ++i){
-            int L0 = (999 / (rebuild_insert_min - rebuild_insert_max))*rebuild_inserts[i] - (999 / (rebuild_insert_min - rebuild_insert_max))*rebuild_insert_max;
+            int L0 = (crange == 0) ? 0 : (int)((999 / crange)*rebuild_inserts[i] - (999 / crange)*rebuild_insert_max);
             if (L0 < 0){L0 = 0;}else if (L0 > 999){L0 = 999;}
 
-            int L1 = (999-0)/2 - (int)((rebuild_surges[i] - surge_offset) * (999-0) / bodywidth / 2);
+            int L1 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((rebuild_surges[i] - surge_offset) * (999-0) / bodywidth / 2);
             if (L1 < 0){L1 = 0;}else if (L1 > 999){L1 = 999;}
 
-            int L2 = (999-0)/2 - (int)((rebuild_sways[i] - sway_offset) * (999-0) / bodywidth / 2);
+            int L2 = (bodywidth == 0) ? 500 : (999-0)/2 - (int)((rebuild_sways[i] - sway_offset) * (999-0) / bodywidth / 2);
             if (L2 < 0){L2 = 0;}else if (L2 > 999){L2 = 999;}
 
             int R0 = (999-0)/2 + (int)(rebuild_twists[i] * 11.1);
@@ -2280,6 +2355,10 @@ MainWindow::MainWindow(QWidget *parent)
     orientation = 0;
     m_drag = false;
     m_dragPosition = this->pos();
+    bodywidth = 0;
+    scripter_L0 = scripter_L1 = scripter_L2 = nullptr;
+    scripter_R0 = scripter_R1 = scripter_R2 = nullptr;
+    scence = nullptr;
     setWindowFlags(Qt::FramelessWindowHint);
     ui->setupUi(this);
     config_init();
@@ -2292,5 +2371,8 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    delete scripter_L0; delete scripter_L1; delete scripter_L2;
+    delete scripter_R0; delete scripter_R1; delete scripter_R2;
+    delete scence;
     delete ui;
 }

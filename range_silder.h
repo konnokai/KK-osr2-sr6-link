@@ -21,6 +21,9 @@ public:
     int margin;
     int select_value;
 
+signals:
+    void rangeChanged();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
