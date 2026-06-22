@@ -331,6 +331,13 @@ void MainWindow::config_init(){
     else{
         ui->rebuild_all_checkbox->setChecked(false);
     }
+    connect(ui->L0, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    connect(ui->L1, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    connect(ui->L2, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    connect(ui->R0, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    connect(ui->R1, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    connect(ui->R2, &QCheckBox::clicked, this, &MainWindow::save_axis_enable);
+    load_axis_enable();
 }
 
 
@@ -1712,6 +1719,28 @@ void MainWindow::load_output_range(){
     silderR0->minvalue = settings->value("R0min", 0).toInt(); silderR0->maxvalue = settings->value("R0max", 999).toInt();
     silderR1->minvalue = settings->value("R1min", 0).toInt(); silderR1->maxvalue = settings->value("R1max", 999).toInt();
     silderR2->minvalue = settings->value("R2min", 0).toInt(); silderR2->maxvalue = settings->value("R2max", 999).toInt();
+    settings->endGroup();
+}
+
+void MainWindow::save_axis_enable(){
+    settings->beginGroup("Axis Enable");
+    settings->setValue("L0", ui->L0->isChecked());
+    settings->setValue("L1", ui->L1->isChecked());
+    settings->setValue("L2", ui->L2->isChecked());
+    settings->setValue("R0", ui->R0->isChecked());
+    settings->setValue("R1", ui->R1->isChecked());
+    settings->setValue("R2", ui->R2->isChecked());
+    settings->endGroup();
+}
+
+void MainWindow::load_axis_enable(){
+    settings->beginGroup("Axis Enable");
+    ui->L0->setChecked(settings->value("L0", true).toBool());
+    ui->L1->setChecked(settings->value("L1", true).toBool());
+    ui->L2->setChecked(settings->value("L2", true).toBool());
+    ui->R0->setChecked(settings->value("R0", true).toBool());
+    ui->R1->setChecked(settings->value("R1", true).toBool());
+    ui->R2->setChecked(settings->value("R2", true).toBool());
     settings->endGroup();
 }
 

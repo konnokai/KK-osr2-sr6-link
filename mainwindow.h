@@ -193,6 +193,8 @@ public:
     void save_scripter();
     void save_output_range();
     void load_output_range();
+    void save_axis_enable();
+    void load_axis_enable();
     void regenerate_scripter();
     void copy_values(QList<int> values,QList<int> index);
     void setplaytime(int index);
