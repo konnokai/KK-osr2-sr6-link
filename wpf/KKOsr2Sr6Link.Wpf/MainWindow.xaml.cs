@@ -25,6 +25,7 @@ public partial class MainWindow : Window
 
     private string _filePath = "";   // resolved scene .txt path currently loaded
     private List<ScenePart> _sceneParts = new();
+    private List<LovemakingData> _lovemakingDatas = new(); // raw captured streams, for "generates"
     private bool _serverRunning;
 
     public MainWindow()
@@ -89,10 +90,68 @@ public partial class MainWindow : Window
         surface.InvalidateVisual();
     }
 
-    // ponytail: the original "generates" re-derived per-part axes; that path isn't
-    // ported yet, so be honest rather than silently no-op. Wire up when needed.
     private void Generate_Click(object s, RoutedEventArgs e)
-        => Status("generate: per-part axis regeneration not implemented yet");
+    {
+        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0) { Status("generate: no scene loaded"); return; }
+        try { RegenerateScripter(); Status($"regenerated axes for {_sceneParts.Count} parts"); }
+        catch (Exception ex) { Status("generate failed: " + ex.Message); }
+    }
+
+    // Re-derive all six axes for every scene part from the captured raw streams,
+    // honouring each part's chara + lovemaking mode. Mirrors mainwindow.cpp regenerate_scripter().
+    private void RegenerateScripter()
+    {
+        int len = _editors[0].Values.Count;
+        for (int p = 0; p < _sceneParts.Count; p++)
+        {
+            int partBegin = _sceneParts[p].Part;
+            int partEnd = (p == _sceneParts.Count - 1) ? len : _sceneParts[p + 1].Part;
+
+            var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == _sceneParts[p].Charas);
+            if (d == null) continue;
+            var (ins, su, sw, tw, ro, pi) = SourceStreams(d, _sceneParts[p].LovemakingMode);
+
+            partEnd = Math.Min(partEnd, Math.Min(ins.Count, len));
+            int n = partEnd - partBegin;
+            if (n <= 0) continue;
+
+            float segMax = float.MinValue, segMin = float.MaxValue, surgeSum = 0, swaySum = 0;
+            for (int i = partBegin; i < partEnd; i++)
+            {
+                if (ins[i] > segMax) segMax = ins[i];
+                if (ins[i] < segMin) segMin = ins[i];
+                surgeSum += su[i]; swaySum += sw[i];
+            }
+            float crange = segMin - segMax;
+            float surgeOffset = surgeSum / n, swayOffset = swaySum / n, bw = d.BodyWidth;
+
+            for (int i = partBegin; i < partEnd; i++)
+            {
+                _editors[0].Values[i] = Clamp(crange == 0 ? 0 : (int)((999f / crange) * ins[i] - (999f / crange) * segMax));
+                _editors[1].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((su[i] - surgeOffset) * 999f / bw / 2f));
+                _editors[2].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((sw[i] - swayOffset) * 999f / bw / 2f));
+                _editors[3].Values[i] = Clamp(999 / 2 + (int)(tw[i] * 11.1f));
+                _editors[4].Values[i] = Clamp(999 / 2 - (int)(ro[i] * 11.1f));
+                _editors[5].Values[i] = Clamp(999 / 2 + (int)(pi[i] * 11.1f / 2f));
+            }
+        }
+        _overview.Values = _editors[0].Values;
+        for (int a = 0; a < 6; a++) _editors[a].Refresh();
+        _overview.Refresh();
+    }
+
+    private static int Clamp(int v) => v < 0 ? 0 : v > 999 ? 999 : v;
+
+    // The raw stream set a part uses depends on its lovemaking mode (mainwindow.cpp:1800-1812).
+    private static (List<float>, List<float>, List<float>, List<float>, List<float>, List<float>)
+        SourceStreams(LovemakingData d, string mode) => mode switch
+        {
+            "blowjob"   => (d.BlowjobInserts,   d.BlowjobSurges,   d.BlowjobSways,   d.BlowjobTwists,   d.BlowjobRolls,   d.BlowjobPitchs),
+            "breastsex" => (d.BreastsexInserts, d.BreastsexSurges, d.BreastsexSways, d.BreastsexTwists, d.BreastsexRolls, d.BreastsexPitchs),
+            "handjobL"  => (d.HandjobLInserts,  d.HandjobLSurges,  d.HandjobLSways,  d.HandjobLTwists,  d.HandjobLRolls,  d.HandjobLPitchs),
+            "handjobR"  => (d.HandjobRInserts,  d.HandjobRSurges,  d.HandjobRSways,  d.HandjobRTwists,  d.HandjobRRolls,  d.HandjobRPitchs),
+            _           => (d.Inserts,          d.Surges,          d.Sways,          d.Twists,          d.Rolls,          d.Pitchs),
+        };
 
     // Serial device / Buttplug device tab toggle.
     private void DeviceTab_Checked(object sender, RoutedEventArgs e)
