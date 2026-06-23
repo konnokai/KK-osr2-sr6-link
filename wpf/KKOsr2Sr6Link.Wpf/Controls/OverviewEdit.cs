@@ -47,6 +47,18 @@ public sealed class OverviewEdit : FrameworkElement
         FocusVisualStyle = null;
     }
 
+    /// <summary>Pick the per-frame <see cref="Intervals"/> so the whole timeline just fills
+    /// <paramref name="viewport"/> px (the visible width of the host ScrollViewer). No-op if there is
+    /// nothing to scale to yet; the user can still Ctrl+wheel/arrow afterwards.</summary>
+    public void FitToWidth(double viewport)
+    {
+        if (Values.Count <= 1 || viewport <= 0) return;
+        int interval = (int)((viewport - _valueEdge * 2 - Pad * 2) / (Values.Count - 1));
+        Intervals = interval < 1 ? 1 : interval;
+        UpdateEdge();
+        Refresh();
+    }
+
     /// <summary>Recompute layout width from the data, like Qt's setFixedWidth in paintEvent.</summary>
     public void Refresh()
     {

@@ -75,6 +75,17 @@ public sealed class ScripterEdit : FrameworkElement
         InvalidateVisual();
     }
 
+    /// <summary>Pick the per-frame <see cref="Intervals"/> so the whole curve just fills
+    /// <paramref name="viewport"/> px. Same as OverviewEdit.FitToWidth; user can still zoom after.</summary>
+    public void FitToWidth(double viewport)
+    {
+        if (Values.Count <= 1 || viewport <= 0) return;
+        int interval = (int)((viewport - _valueEdge * 2 - Pad * 2) / (Values.Count - 1));
+        Intervals = interval < 1 ? 1 : interval;
+        UpdateEdge();
+        Refresh();
+    }
+
     /// <summary>Receive a clipboard from another axis (mirrors the cross-axis get_copy_values wiring).</summary>
     public void SetClipboard(List<int> copyValues, List<int> copyIndexs)
     {

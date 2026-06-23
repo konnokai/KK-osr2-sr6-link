@@ -142,6 +142,8 @@
                             <TextBlock Grid.Column="2" Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Grid.Column="3" x:Name="ServerPortBox" Text="8000"/>
                         </Grid>
+
+                        <Button Content="reset devices (all axes → 500)" Click="Reset_Click" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
 
@@ -186,7 +188,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="select part" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <ComboBox Grid.Column="1" x:Name="PartList" Margin="0,0,16,0"/>
@@ -198,7 +200,8 @@
                                     <ComboBoxItem>handjobL</ComboBoxItem>
                                     <ComboBoxItem>handjobR</ComboBoxItem>
                                 </ComboBox>
-                                <Button Grid.Column="4" Content="generates" Click="Generate_Click"/>
+                                <Button Grid.Column="4" Content="create" Click="CreatePart_Click" Margin="0,0,6,0"/>
+                                <Button Grid.Column="5" Content="generates" Click="Generate_Click"/>
                             </Grid>
                         </Border>
 

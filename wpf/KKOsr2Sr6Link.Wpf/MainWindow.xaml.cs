@@ -89,6 +89,20 @@ public partial class MainWindow : Window
         FrameworkElement surface = tag < 0 ? _overview : _editors[tag];
         SurfaceHost.Content = surface;
         surface.InvalidateVisual();
+        FitCurrentSurface();
+    }
+
+    // Zoom the surface currently shown in the host so it just fills the visible width (N1). Deferred to
+    // Loaded priority so the ScrollViewer has a real ViewportWidth; no-op while the page is hidden.
+    private void FitCurrentSurface()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            double vw = SurfaceHost.ViewportWidth;
+            if (vw <= 0) return;
+            if (SurfaceHost.Content is OverviewEdit ov) ov.FitToWidth(vw);
+            else if (SurfaceHost.Content is ScripterEdit se) se.FitToWidth(vw);
+        }), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private void Generate_Click(object s, RoutedEventArgs e)
@@ -103,42 +117,63 @@ public partial class MainWindow : Window
     private void RegenerateScripter()
     {
         int len = _editors[0].Values.Count;
-        for (int p = 0; p < _sceneParts.Count; p++)
-        {
-            int partBegin = _sceneParts[p].Part;
-            int partEnd = (p == _sceneParts.Count - 1) ? len : _sceneParts[p + 1].Part;
-
-            var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == _sceneParts[p].Charas);
-            if (d == null) continue;
-            var (ins, su, sw, tw, ro, pi) = SourceStreams(d, _sceneParts[p].LovemakingMode);
-
-            partEnd = Math.Min(partEnd, Math.Min(ins.Count, len));
-            int n = partEnd - partBegin;
-            if (n <= 0) continue;
-
-            float segMax = float.MinValue, segMin = float.MaxValue, surgeSum = 0, swaySum = 0;
-            for (int i = partBegin; i < partEnd; i++)
-            {
-                if (ins[i] > segMax) segMax = ins[i];
-                if (ins[i] < segMin) segMin = ins[i];
-                surgeSum += su[i]; swaySum += sw[i];
-            }
-            float crange = segMin - segMax;
-            float surgeOffset = surgeSum / n, swayOffset = swaySum / n, bw = d.BodyWidth;
-
-            for (int i = partBegin; i < partEnd; i++)
-            {
-                _editors[0].Values[i] = Clamp(crange == 0 ? 0 : (int)((999f / crange) * ins[i] - (999f / crange) * segMax));
-                _editors[1].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((su[i] - surgeOffset) * 999f / bw / 2f));
-                _editors[2].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((sw[i] - swayOffset) * 999f / bw / 2f));
-                _editors[3].Values[i] = Clamp(999 / 2 + (int)(tw[i] * 11.1f));
-                _editors[4].Values[i] = Clamp(999 / 2 - (int)(ro[i] * 11.1f));
-                _editors[5].Values[i] = Clamp(999 / 2 + (int)(pi[i] * 11.1f / 2f));
-            }
-        }
+        for (int p = 0; p < _sceneParts.Count; p++) RegeneratePart(p, len);
         _overview.Values = _editors[0].Values;
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
         _overview.Refresh();
+    }
+
+    // Re-derive all six axes for one scene part from its chara/mode raw streams. Shared by
+    // "generates" (all parts) and the single-part "create" button (creaet_btn).
+    private void RegeneratePart(int p, int len)
+    {
+        int partBegin = _sceneParts[p].Part;
+        int partEnd = (p == _sceneParts.Count - 1) ? len : _sceneParts[p + 1].Part;
+
+        var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == _sceneParts[p].Charas);
+        if (d == null) return;
+        var (ins, su, sw, tw, ro, pi) = SourceStreams(d, _sceneParts[p].LovemakingMode);
+
+        partEnd = Math.Min(partEnd, Math.Min(ins.Count, len));
+        int n = partEnd - partBegin;
+        if (n <= 0) return;
+
+        float segMax = float.MinValue, segMin = float.MaxValue, surgeSum = 0, swaySum = 0;
+        for (int i = partBegin; i < partEnd; i++)
+        {
+            if (ins[i] > segMax) segMax = ins[i];
+            if (ins[i] < segMin) segMin = ins[i];
+            surgeSum += su[i]; swaySum += sw[i];
+        }
+        float crange = segMin - segMax;
+        float surgeOffset = surgeSum / n, swayOffset = swaySum / n, bw = d.BodyWidth;
+
+        for (int i = partBegin; i < partEnd; i++)
+        {
+            _editors[0].Values[i] = Clamp(crange == 0 ? 0 : (int)((999f / crange) * ins[i] - (999f / crange) * segMax));
+            _editors[1].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((su[i] - surgeOffset) * 999f / bw / 2f));
+            _editors[2].Values[i] = Clamp(bw == 0 ? 500 : 999 / 2 - (int)((sw[i] - swayOffset) * 999f / bw / 2f));
+            _editors[3].Values[i] = Clamp(999 / 2 + (int)(tw[i] * 11.1f));
+            _editors[4].Values[i] = Clamp(999 / 2 - (int)(ro[i] * 11.1f));
+            _editors[5].Values[i] = Clamp(999 / 2 + (int)(pi[i] * 11.1f / 2f));
+        }
+    }
+
+    // Single-part "create": recompute only the currently selected part (mirrors creaet_btn).
+    private void CreatePart_Click(object s, RoutedEventArgs e)
+    {
+        int p = PartList.SelectedIndex;
+        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0 || p < 0 || p >= _sceneParts.Count)
+        { Status("create: no part selected"); return; }
+        try
+        {
+            RegeneratePart(p, _editors[0].Values.Count);
+            _overview.Values = _editors[0].Values;
+            for (int a = 0; a < 6; a++) _editors[a].Refresh();
+            _overview.Refresh();
+            Status($"recomputed part{p + 1}");
+        }
+        catch (Exception ex) { Status("create failed: " + ex.Message); }
     }
 
     // "rebuild selected times" from an axis editor: re-derive the selected frames from the
@@ -361,7 +396,7 @@ public partial class MainWindow : Window
     // ---------- navigation / title bar ----------
 
     private void NavHome_Click(object s, RoutedEventArgs e) => ShowPage(PageHome);
-    private void NavScripter_Click(object s, RoutedEventArgs e) => ShowPage(PageScripter);
+    private void NavScripter_Click(object s, RoutedEventArgs e) { ShowPage(PageScripter); FitCurrentSurface(); }
     private void NavSettings_Click(object s, RoutedEventArgs e) => ShowPage(PageSettings);
 
     private void ShowPage(UIElement page)
@@ -378,6 +413,7 @@ public partial class MainWindow : Window
 
     private void RunServer_Click(object s, RoutedEventArgs e)
     {
+        Debounce(RunServerBtn);
         if (_serverRunning) { _server.Stop(); _serverRunning = false; RunServerBtn.Content = "Run server"; ClientLabel.Text = "server stopped"; return; }
         try
         {
@@ -418,8 +454,24 @@ public partial class MainWindow : Window
                 _editors[a].SelectedLine = index; _editors[a].InvalidateVisual();
                 if (_engine.CurrentScaled[a] >= 0) { _sliders[a].Value = _engine.CurrentScaled[a]; }
             }
+
+            // follow the playhead into its part, switching the part/mode/chara combos (setplaytime:1890).
+            int part = PartIndexForLine(index);
+            if (part != PartList.SelectedIndex) PartList.SelectedIndex = part; // drives OnPartSelected (guarded)
         }
         catch (Exception ex) { Status("scene message error: " + ex.Message); }
+    }
+
+    // Which scene part contains a given playback line (parts are ordered, each begins at .Part).
+    private int PartIndexForLine(int index)
+    {
+        int part = 0;
+        for (int p = 0; p < _sceneParts.Count; p++)
+        {
+            if (_sceneParts[p].Part <= index) part = p;
+            else break;
+        }
+        return part;
     }
 
     private void OnScrub(int index)
@@ -541,6 +593,7 @@ public partial class MainWindow : Window
 
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
         _overview.Refresh();
+        FitCurrentSurface(); // default zoom = fill the visible width (N1)
         Status("loaded " + Path.GetFileName(path));
     }
 
@@ -603,13 +656,25 @@ public partial class MainWindow : Window
 
     private void ReloadPorts_Click(object s, RoutedEventArgs e)
     {
-        PortList.Items.Clear();
-        foreach (var p in SerialOutput.AvailablePorts()) PortList.Items.Add(p);
-        if (PortList.Items.Count > 0) PortList.SelectedIndex = 0;
+        try
+        {
+            PortList.Items.Clear();
+            foreach (var p in SerialOutput.AvailablePorts()) PortList.Items.Add(p);
+            if (PortList.Items.Count > 0) PortList.SelectedIndex = 0;
+        }
+        catch (Exception ex) { Status("port scan failed: " + ex.Message); }
+    }
+
+    // Send every axis to mid (500) on the connected outputs (N2).
+    private void Reset_Click(object s, RoutedEventArgs e)
+    {
+        try { _engine.ResetAll(); Status("reset axes to 500"); }
+        catch (Exception ex) { Status("reset failed: " + ex.Message); }
     }
 
     private void LinkSerial_Click(object s, RoutedEventArgs e)
     {
+        Debounce(LinkSerialBtn);
         if (_serial.IsOpen) { _serial.Close(); LinkSerialBtn.Content = "Link serial"; Status("serial closed"); return; }
         if (PortList.SelectedItem is not string port) { Status("no serial port selected"); return; }
         try
@@ -670,6 +735,14 @@ public partial class MainWindow : Window
     }
 
     private void Status(string text) => StatusBar.Text = text;
+
+    // Briefly disable a button after a click to swallow accidental double-clicks
+    // (mirrors Qt delay_change1/2 + timer1/2, interval 3000ms).
+    private static async void Debounce(System.Windows.Controls.Control btn, int ms = 3000)
+    {
+        btn.IsEnabled = false;
+        try { await System.Threading.Tasks.Task.Delay(ms); } finally { btn.IsEnabled = true; }
+    }
 
     private void Cleanup()
     {

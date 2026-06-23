@@ -69,12 +69,29 @@ public static class SceneFiles
             result.Add(new ScenePart
             {
                 Part = obj.TryGetPropertyValue("part", out var p) ? (p?.GetValue<int>() ?? 0) : 0,
-                LovemakingMode = obj.TryGetPropertyValue("lovemaking mode", out var m) ? (m?.GetValue<string>() ?? "") : "",
+                LovemakingMode = ModeFromQt(obj.TryGetPropertyValue("lovemaking mode", out var m) ? (m?.GetValue<string>() ?? "") : ""),
                 Charas = obj.TryGetPropertyValue("charas", out var c) ? (c?.GetValue<string>() ?? "") : "",
             });
         }
         return result;
     }
+
+    // The Qt app stores handjob modes as "handjob(Detecting girl left/right hand)"; WPF uses the
+    // short "handjobL"/"handjobR" internally. Translate at the file boundary so cfgs round-trip both
+    // ways. Other modes (normal/blowjob/breastsex) match verbatim and pass through.
+    private static string ModeFromQt(string mode) => mode switch
+    {
+        "handjob(Detecting girl left hand)" => "handjobL",
+        "handjob(Detecting girl right hand)" => "handjobR",
+        _ => mode,
+    };
+
+    private static string ModeToQt(string mode) => mode switch
+    {
+        "handjobL" => "handjob(Detecting girl left hand)",
+        "handjobR" => "handjob(Detecting girl right hand)",
+        _ => mode,
+    };
 
     public static void SaveSr6Cfg(string path, IEnumerable<ScenePart> parts)
     {
@@ -85,7 +102,7 @@ public static class SceneFiles
         {
             w.WriteStartObject();
             w.WriteString("charas", part.Charas);
-            w.WriteString("lovemaking mode", part.LovemakingMode);
+            w.WriteString("lovemaking mode", ModeToQt(part.LovemakingMode));
             w.WriteNumber("part", part.Part);
             w.WriteEndObject();
         }

@@ -47,6 +47,32 @@ public class SceneFilesTests
     }
 
     [Fact]
+    public void Sr6Cfg_HandjobMode_RoundTripsThroughQtStrings()
+    {
+        var path = Temp(".sr6cfg");
+        try
+        {
+            // WPF saves the short form; on disk it must be Qt's long form so Qt can read it back.
+            var parts = new List<ScenePart>
+            {
+                new() { Part = 0, LovemakingMode = "handjobL", Charas = "g-b" },
+                new() { Part = 10, LovemakingMode = "handjobR", Charas = "g-b" },
+            };
+            SceneFiles.SaveSr6Cfg(path, parts);
+
+            var raw = JsonNode.Parse(File.ReadAllText(path))!.AsArray();
+            Assert.Equal("handjob(Detecting girl left hand)", (string)raw[0]!["lovemaking mode"]!);
+            Assert.Equal("handjob(Detecting girl right hand)", (string)raw[1]!["lovemaking mode"]!);
+
+            // Loading translates back to the short form WPF uses internally.
+            var loaded = SceneFiles.LoadSr6Cfg(path);
+            Assert.Equal("handjobL", loaded[0].LovemakingMode);
+            Assert.Equal("handjobR", loaded[1].LovemakingMode);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void Funscript_Export_MapsTimeAndPosition_SkipsMinusOne()
     {
         var path = Temp(".funscript");

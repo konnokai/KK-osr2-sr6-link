@@ -36,6 +36,29 @@ public sealed class PlaybackEngine
     }
 
     /// <summary>
+    /// Send every axis to its mid position (500) on all connected outputs — serial (if open) and each
+    /// mapped+enabled Buttplug linear feature. Clears the dedup state so the next live frame re-sends.
+    /// </summary>
+    public void ResetAll(int sleepMs = IntervalMs)
+    {
+        for (int a = 0; a < 6; a++)
+        {
+            if (Serial?.IsOpen == true) Serial.WriteAxis((Axis)a, 500, sleepMs);
+
+            var bp = Buttplug;
+            if (bp == null) continue;
+            foreach (var device in bp.Devices)
+            {
+                if (!device.IsLinear) continue;
+                for (int f = 0; f < device.Feature.Count; f++)
+                    if (device.Feature[f] == a && device.FeatureEnable[f] == 1)
+                        _ = bp.SendLinearCmdAsync(f, device.Index, sleepMs, 500);
+            }
+        }
+        ResetDedup();
+    }
+
+    /// <summary>
     /// For each enabled axis, find the first non-(-1) value after <paramref name="index"/>, scale it to
     /// the axis range, and emit a command only if it changed since the last send (dedup). Updates
     /// CurrentScaled and the dedup state. Pure aside from that state — no I/O.

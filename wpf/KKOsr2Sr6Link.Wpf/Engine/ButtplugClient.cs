@@ -84,7 +84,10 @@ public sealed class ButtplugClient : IDisposable
 
     public void HandleMessage(string message)
     {
-        if (JsonNode.Parse(message) is not JsonArray arr) return;
+        JsonNode? parsed;
+        try { parsed = JsonNode.Parse(message); }
+        catch (System.Text.Json.JsonException ex) { Error?.Invoke("bad message: " + ex.Message); return; }
+        if (parsed is not JsonArray arr) return;
         bool changed = false;
         foreach (var node in arr)
         {
