@@ -19,7 +19,7 @@
 
         <!-- title bar -->
         <Grid Grid.Row="0" Background="{StaticResource PanelDark}">
-            <TextBlock x:Name="ClientLabel" Text="server stopped" VerticalAlignment="Center" Margin="14,0" FontSize="13"/>
+            <TextBlock x:Name="ClientLabel" Text="{DynamicResource L.ServerStopped}" VerticalAlignment="Center" Margin="14,0" FontSize="13"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" WindowChrome.IsHitTestVisibleInChrome="True">
                 <Button x:Name="MinBtn" Content="—" Width="40" Margin="0" Click="Minimize_Click"/>
                 <Button x:Name="MaxBtn" Content="◻" Width="40" Margin="0" Click="Maximize_Click"/>
@@ -36,11 +36,11 @@
 
             <!-- left nav -->
             <DockPanel Grid.Column="0" Background="{StaticResource PanelDark}">
-                <Button DockPanel.Dock="Bottom" Content="Settings" Click="NavSettings_Click" Margin="6,2,6,8"/>
+                <Button DockPanel.Dock="Bottom" Content="{DynamicResource L.Settings}" Click="NavSettings_Click" Margin="6,2,6,8"/>
                 <StackPanel>
-                    <Button x:Name="RunServerBtn" Content="Run server" Click="RunServer_Click" Height="44" Margin="6,8,6,8"/>
-                    <Button Content="Home" Click="NavHome_Click" Margin="6,2"/>
-                    <Button Content="Scripter" Click="NavScripter_Click" Margin="6,2"/>
+                    <Button x:Name="RunServerBtn" Content="{DynamicResource L.RunServer}" Click="RunServer_Click" Height="44" Margin="6,8,6,8"/>
+                    <Button Content="{DynamicResource L.Home}" Click="NavHome_Click" Margin="6,2"/>
+                    <Button Content="{DynamicResource L.Scripter}" Click="NavScripter_Click" Margin="6,2"/>
                 </StackPanel>
             </DockPanel>
 
@@ -48,7 +48,7 @@
                 <!-- HOME -->
                 <ScrollViewer x:Name="PageHome" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,8,0">
-                        <TextBlock Text="load scene" FontSize="16" Margin="0,0,0,8"/>
+                        <TextBlock Text="{DynamicResource L.LoadScene}" FontSize="16" Margin="0,0,0,8"/>
                         <Border Style="{StaticResource Card}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -60,17 +60,17 @@
                                 <Border Grid.Column="0" BorderBrush="#4A5160" BorderThickness="1" CornerRadius="4" Margin="0,0,8,0"/>
                                 <Grid Grid.Column="1">
                                     <Image x:Name="ScenePreview" Stretch="Uniform" MinHeight="240"/>
-                                    <TextBlock x:Name="ScenePathLabel" Text="no scene loaded" VerticalAlignment="Bottom"
+                                    <TextBlock x:Name="ScenePathLabel" Text="{DynamicResource L.NoSceneLoaded}" VerticalAlignment="Bottom"
                                                HorizontalAlignment="Center" Margin="6" TextWrapping="Wrap"/>
                                 </Grid>
                                 <Border Grid.Column="2" BorderBrush="#4A5160" BorderThickness="1" CornerRadius="4" Margin="8,0,0,0"/>
                             </Grid>
                         </Border>
 
-                        <TextBlock Text="devices and server setting" FontSize="16" Margin="0,8,0,8"/>
+                        <TextBlock Text="{DynamicResource L.DevicesServerSetting}" FontSize="16" Margin="0,8,0,8"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <RadioButton Style="{StaticResource TabRadio}" Content="Serial device" Tag="serial" IsChecked="True" Checked="DeviceTab_Checked"/>
-                            <RadioButton Style="{StaticResource TabRadio}" Content="Buttplug device" Tag="buttplug" Checked="DeviceTab_Checked"/>
+                            <RadioButton Style="{StaticResource TabRadio}" Content="{DynamicResource L.SerialDevice}" Tag="serial" IsChecked="True" Checked="DeviceTab_Checked"/>
+                            <RadioButton Style="{StaticResource TabRadio}" Content="{DynamicResource L.ButtplugDevice}" Tag="buttplug" Checked="DeviceTab_Checked"/>
                         </StackPanel>
                         <Border Style="{StaticResource Card}">
                             <Grid>
@@ -81,7 +81,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Com" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="{DynamicResource L.Com}" VerticalAlignment="Center"/>
                                         <ComboBox Grid.Column="1" x:Name="PortList"/>
                                         <Button Grid.Column="2" Content="⟳" Click="ReloadPorts_Click" Margin="6,0,0,0"/>
                                     </Grid>
@@ -89,7 +89,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="BaudRate" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="{DynamicResource L.BaudRate}" VerticalAlignment="Center"/>
                                         <TextBox Grid.Column="1" x:Name="BaudBox" Text="115200"/>
                                         <Button Grid.Column="2" x:Name="LinkSerialBtn" Content="▷" Click="LinkSerial_Click" Margin="6,0,0,0"/>
                                     </Grid>
@@ -103,7 +103,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Devices list" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="{DynamicResource L.DevicesList}" VerticalAlignment="Center"/>
                                         <ComboBox Grid.Column="1" x:Name="DeviceList" SelectionChanged="DeviceList_Changed"/>
                                         <Button Grid.Column="2" Content="⟳" Click="Rescan_Click" Margin="6,0,0,0"/>
                                     </Grid>
@@ -112,9 +112,9 @@
                                             <ColumnDefinition Width="110"/><ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/><ColumnDefinition Width="120"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Feature select" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="{DynamicResource L.FeatureSelect}" VerticalAlignment="Center"/>
                                         <ComboBox Grid.Column="1" x:Name="FeatureList" SelectionChanged="FeatureList_Changed" Margin="0,0,16,0"/>
-                                        <TextBlock Grid.Column="2" Text="work on axes" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                        <TextBlock Grid.Column="2" Text="{DynamicResource L.WorkOnAxes}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                         <ComboBox Grid.Column="3" x:Name="AxisMapList" SelectionChanged="AxisMap_Changed">
                                             <ComboBoxItem>L0</ComboBoxItem><ComboBoxItem>L1</ComboBoxItem><ComboBoxItem>L2</ComboBoxItem>
                                             <ComboBoxItem>R0</ComboBoxItem><ComboBoxItem>R1</ComboBoxItem><ComboBoxItem>R2</ComboBoxItem>
@@ -124,7 +124,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="180"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Intiface Central webserver ip" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="0" Text="{DynamicResource L.IntifaceIp}" VerticalAlignment="Center"/>
                                         <TextBox Grid.Column="1" x:Name="WebIpBox" Text="ws://localhost:12345"/>
                                         <Button Grid.Column="2" x:Name="LinkIntifaceBtn" Content="▷" Click="LinkIntiface_Click" Margin="6,0,0,0"/>
                                     </Grid>
@@ -137,24 +137,24 @@
                                 <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Server:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="0" Text="{DynamicResource L.Server}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Grid.Column="1" x:Name="ServerIpBox" Text="127.0.0.1" Margin="0,0,16,0"/>
-                            <TextBlock Grid.Column="2" Text="Port" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="2" Text="{DynamicResource L.Port}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Grid.Column="3" x:Name="ServerPortBox" Text="8000"/>
                         </Grid>
 
-                        <Button Content="reset devices (all axes → 500)" Click="Reset_Click" Margin="0,8,0,0"/>
+                        <Button Content="{DynamicResource L.ResetDevices}" Click="Reset_Click" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
 
                 <!-- SCRIPTER -->
                 <ScrollViewer x:Name="PageScripter" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,8,0">
-                        <TextBlock Text="scripter edit" HorizontalAlignment="Center" FontSize="15" Margin="0,2,0,8"/>
+                        <TextBlock Text="{DynamicResource L.ScripterEdit}" HorizontalAlignment="Center" FontSize="15" Margin="0,2,0,8"/>
 
                         <!-- Overview / per-axis tabs -->
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <RadioButton Style="{StaticResource TabRadio}" Content="Overview" Tag="-1" IsChecked="True" Checked="ScripterTab_Checked"/>
+                            <RadioButton Style="{StaticResource TabRadio}" Content="{DynamicResource L.Overview}" Tag="-1" IsChecked="True" Checked="ScripterTab_Checked"/>
                             <RadioButton Style="{StaticResource TabRadio}" Content="L0" Tag="0" Checked="ScripterTab_Checked"/>
                             <RadioButton Style="{StaticResource TabRadio}" Content="L1" Tag="1" Checked="ScripterTab_Checked"/>
                             <RadioButton Style="{StaticResource TabRadio}" Content="L2" Tag="2" Checked="ScripterTab_Checked"/>
@@ -175,9 +175,9 @@
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="girls_list" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource L.GirlsList}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <ComboBox Grid.Column="1" x:Name="GirlList" Margin="0,0,16,0"/>
-                                <TextBlock Grid.Column="2" Text="boys_list" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="2" Text="{DynamicResource L.BoysList}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <ComboBox Grid.Column="3" x:Name="BoyList"/>
                             </Grid>
                         </Border>
@@ -190,9 +190,9 @@
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="select part" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource L.SelectPart}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <ComboBox Grid.Column="1" x:Name="PartList" Margin="0,0,16,0"/>
-                                <TextBlock Grid.Column="2" Text="lovemaking mode" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <TextBlock Grid.Column="2" Text="{DynamicResource L.LovemakingMode}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                 <ComboBox Grid.Column="3" x:Name="ModeList" Margin="0,0,16,0">
                                     <ComboBoxItem IsSelected="True">normal</ComboBoxItem>
                                     <ComboBoxItem>blowjob</ComboBoxItem>
@@ -200,8 +200,8 @@
                                     <ComboBoxItem>handjobL</ComboBoxItem>
                                     <ComboBoxItem>handjobR</ComboBoxItem>
                                 </ComboBox>
-                                <Button Grid.Column="4" Content="create" Click="CreatePart_Click" Margin="0,0,6,0"/>
-                                <Button Grid.Column="5" Content="generates" Click="Generate_Click"/>
+                                <Button Grid.Column="4" Content="{DynamicResource L.Create}" Click="CreatePart_Click" Margin="0,0,6,0"/>
+                                <Button Grid.Column="5" Content="{DynamicResource L.Generates}" Click="Generate_Click"/>
                             </Grid>
                         </Border>
 
@@ -211,13 +211,13 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Content="show combobox charas" Click="ShowChars_Click" Margin="0,0,6,0"/>
-                                <Button Grid.Column="1" Content="hide combobox charas" Click="HideChars_Click" Margin="0,0,6,0"/>
-                                <CheckBox Grid.Column="2" x:Name="SelectOnSwitchCheck" Content="select the chara when switching combobox" VerticalAlignment="Center"/>
+                                <Button Grid.Column="0" Content="{DynamicResource L.ShowCharas}" Click="ShowChars_Click" Margin="0,0,6,0"/>
+                                <Button Grid.Column="1" Content="{DynamicResource L.HideCharas}" Click="HideChars_Click" Margin="0,0,6,0"/>
+                                <CheckBox Grid.Column="2" x:Name="SelectOnSwitchCheck" Content="{DynamicResource L.SelectOnSwitch}" VerticalAlignment="Center"/>
                             </Grid>
                         </Border>
 
-                        <TextBlock Text="output range" HorizontalAlignment="Center" FontSize="15" Margin="0,4,0,8"/>
+                        <TextBlock Text="{DynamicResource L.OutputRange}" HorizontalAlignment="Center" FontSize="15" Margin="0,4,0,8"/>
 
                         <!-- per-axis output range, L* left / R* right -->
                         <Border Style="{StaticResource Card}">
@@ -242,19 +242,19 @@
 
                         <Button Click="Convert_Click" HorizontalContentAlignment="Stretch" Margin="0,0,0,4">
                             <DockPanel LastChildFill="False">
-                                <TextBlock DockPanel.Dock="Left" Text="converting sr6script files to funscript files"/>
+                                <TextBlock DockPanel.Dock="Left" Text="{DynamicResource L.ConvertFunscript}"/>
                                 <TextBlock DockPanel.Dock="Right" Text="⟳"/>
                             </DockPanel>
                         </Button>
                         <Button Click="Save_Click" HorizontalContentAlignment="Stretch" Margin="0,0,0,4">
                             <DockPanel LastChildFill="False">
-                                <TextBlock DockPanel.Dock="Left" Text="save scripter"/>
+                                <TextBlock DockPanel.Dock="Left" Text="{DynamicResource L.SaveScripter}"/>
                                 <TextBlock DockPanel.Dock="Right" Text="💾"/>
                             </DockPanel>
                         </Button>
                         <Button Click="OpenFolder_Click" HorizontalContentAlignment="Stretch" Margin="0,0,0,4">
                             <DockPanel LastChildFill="False">
-                                <TextBlock DockPanel.Dock="Left" Text="open scripts folders"/>
+                                <TextBlock DockPanel.Dock="Left" Text="{DynamicResource L.OpenFolders}"/>
                                 <TextBlock DockPanel.Dock="Right" Text="📁"/>
                             </DockPanel>
                         </Button>
@@ -264,24 +264,36 @@
                 <!-- SETTINGS -->
                 <ScrollViewer x:Name="PageSettings" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,8,0">
-                        <TextBlock Text="game setting" FontSize="16" Margin="0,0,0,8"/>
+                        <TextBlock Text="{DynamicResource L.GameSetting}" FontSize="16" Margin="0,0,0,8"/>
                         <Border Style="{StaticResource Card}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="110"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="game root" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource L.GameRoot}" VerticalAlignment="Center"/>
                                 <TextBox Grid.Column="1" x:Name="GameRootBox"/>
                                 <Button Grid.Column="2" Content="📁" Click="BrowseGameRoot_Click" Margin="6,0,0,0"/>
                             </Grid>
                         </Border>
 
-                        <TextBlock Text="scripter edit setting" FontSize="16" Margin="0,8,0,8"/>
+                        <TextBlock Text="{DynamicResource L.ScripterEditSetting}" FontSize="16" Margin="0,8,0,8"/>
                         <Border Style="{StaticResource Card}">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="rebuild points on all axes for the selected time period" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource L.RebuildAllDesc}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="RebuildAllCheck" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="{DynamicResource L.Language}" FontSize="16" Margin="0,8,0,8"/>
+                        <Border Style="{StaticResource Card}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{DynamicResource L.Language}" VerticalAlignment="Center"/>
+                                <ComboBox Grid.Column="1" x:Name="LanguageList" SelectionChanged="Language_Changed">
+                                    <ComboBoxItem Tag="en">English</ComboBoxItem>
+                                    <ComboBoxItem Tag="zh-Hant">繁體中文</ComboBoxItem>
+                                </ComboBox>
                             </Grid>
                         </Border>
                     </StackPanel>

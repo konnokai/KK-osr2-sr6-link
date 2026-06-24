@@ -1,0 +1,96 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:s="clr-namespace:System;assembly=mscorlib">
+
+    <!-- nav / title bar -->
+    <s:String x:Key="L.ServerStopped">伺服器已停止</s:String>
+    <s:String x:Key="L.Settings">設定</s:String>
+    <s:String x:Key="L.RunServer">啟動伺服器</s:String>
+    <s:String x:Key="L.StopServer">停止伺服器</s:String>
+    <s:String x:Key="L.Home">首頁</s:String>
+    <s:String x:Key="L.Scripter">腳本編輯</s:String>
+
+    <!-- home page -->
+    <s:String x:Key="L.LoadScene">載入場景</s:String>
+    <s:String x:Key="L.NoSceneLoaded">尚未載入場景</s:String>
+    <s:String x:Key="L.DevicesServerSetting">裝置與伺服器設定</s:String>
+    <s:String x:Key="L.SerialDevice">序列埠裝置</s:String>
+    <s:String x:Key="L.ButtplugDevice">Buttplug 裝置</s:String>
+    <s:String x:Key="L.Com">連接埠</s:String>
+    <s:String x:Key="L.BaudRate">傳輸速率</s:String>
+    <s:String x:Key="L.DevicesList">裝置清單</s:String>
+    <s:String x:Key="L.FeatureSelect">功能選擇</s:String>
+    <s:String x:Key="L.WorkOnAxes">對應軸</s:String>
+    <s:String x:Key="L.IntifaceIp">Intiface Central 伺服器位址</s:String>
+    <s:String x:Key="L.Server">伺服器：</s:String>
+    <s:String x:Key="L.Port">連接埠</s:String>
+    <s:String x:Key="L.ResetDevices">重設裝置（所有軸 → 500）</s:String>
+
+    <!-- scripter page -->
+    <s:String x:Key="L.ScripterEdit">腳本編輯</s:String>
+    <s:String x:Key="L.Overview">總覽</s:String>
+    <s:String x:Key="L.GirlsList">女角清單</s:String>
+    <s:String x:Key="L.BoysList">男角清單</s:String>
+    <s:String x:Key="L.SelectPart">選擇片段</s:String>
+    <s:String x:Key="L.LovemakingMode">愛愛模式</s:String>
+    <s:String x:Key="L.Create">重建選取的單一片段</s:String>
+    <s:String x:Key="L.Generates">重建全部片段</s:String>
+    <s:String x:Key="L.ShowCharas">顯示清單角色</s:String>
+    <s:String x:Key="L.HideCharas">隱藏清單角色</s:String>
+    <s:String x:Key="L.SelectOnSwitch">切換清單時選取該角色</s:String>
+    <s:String x:Key="L.OutputRange">輸出範圍</s:String>
+    <s:String x:Key="L.ConvertFunscript">將 sr6script 檔案轉換為 funscript 檔案</s:String>
+    <s:String x:Key="L.SaveScripter">儲存腳本</s:String>
+    <s:String x:Key="L.OpenFolders">開啟腳本資料夾</s:String>
+
+    <!-- settings page -->
+    <s:String x:Key="L.GameSetting">遊戲設定</s:String>
+    <s:String x:Key="L.GameRoot">遊戲根目錄</s:String>
+    <s:String x:Key="L.ScripterEditSetting">腳本編輯設定</s:String>
+    <s:String x:Key="L.RebuildAllDesc">在選取的時間區間重建所有軸的點位</s:String>
+    <s:String x:Key="L.Language">語言</s:String>
+
+    <!-- code-set toggle / client states ({0}=位址，{0}:{1}=ip:port) -->
+    <s:String x:Key="L.LinkSerial">連接序列埠</s:String>
+    <s:String x:Key="L.UnlinkSerial">中斷序列埠</s:String>
+    <s:String x:Key="L.Connect">連線</s:String>
+    <s:String x:Key="L.Disconnect">中斷連線</s:String>
+    <s:String x:Key="L.ClientDisconnected">用戶端已中斷連線</s:String>
+    <s:String x:Key="L.LinkFrom">連線來源：{0}</s:String>
+    <s:String x:Key="L.Listening">正在監聽 {0}:{1}</s:String>
+
+    <!-- status bar messages ({0}=細節：數量／名稱／錯誤) -->
+    <s:String x:Key="St.GenerateNoScene">產生：尚未載入場景</s:String>
+    <s:String x:Key="St.RegeneratedParts">已重新產生 {0} 個片段的軸資料</s:String>
+    <s:String x:Key="St.GenerateFailed">產生失敗：{0}</s:String>
+    <s:String x:Key="St.CreateNoPart">建立：尚未選擇片段</s:String>
+    <s:String x:Key="St.RecomputedPart">已重新計算片段 {0}</s:String>
+    <s:String x:Key="St.CreateFailed">建立失敗：{0}</s:String>
+    <s:String x:Key="St.RebuildNoData">重建：找不到 {0} 的原始資料</s:String>
+    <s:String x:Key="St.IntifaceConnected">Intiface 已連線</s:String>
+    <s:String x:Key="St.IntifaceDisconnected">Intiface 已中斷連線</s:String>
+    <s:String x:Key="St.IntifaceError">Intiface：{0}</s:String>
+    <s:String x:Key="St.SerialError">序列埠：{0}</s:String>
+    <s:String x:Key="St.ServerStartFailed">伺服器啟動失敗：{0}</s:String>
+    <s:String x:Key="St.SceneMessageError">場景訊息錯誤：{0}</s:String>
+    <s:String x:Key="St.ScenePathNotUnder">場景路徑不在 UserData/KK_osr_sr6_link/ 之下：{0}</s:String>
+    <s:String x:Key="St.OldOrEmptyScene">舊版或空白場景；請以最新版插件重新擷取。</s:String>
+    <s:String x:Key="St.SceneNotFound">找不到場景檔案：{0}</s:String>
+    <s:String x:Key="St.Loaded">已載入 {0}</s:String>
+    <s:String x:Key="St.NoScene">尚未載入場景</s:String>
+    <s:String x:Key="St.SavedScripts">已儲存腳本</s:String>
+    <s:String x:Key="St.SaveFailed">儲存失敗：{0}</s:String>
+    <s:String x:Key="St.ExportedFunscripts">已匯出 6 個 funscript</s:String>
+    <s:String x:Key="St.ExportFailed">匯出失敗：{0}</s:String>
+    <s:String x:Key="St.OpenFolderFailed">開啟資料夾失敗：{0}</s:String>
+    <s:String x:Key="St.PortScanFailed">連接埠掃描失敗：{0}</s:String>
+    <s:String x:Key="St.ResetAxes">已將所有軸重設為 500</s:String>
+    <s:String x:Key="St.ResetFailed">重設失敗：{0}</s:String>
+    <s:String x:Key="St.SerialClosed">已關閉序列埠</s:String>
+    <s:String x:Key="St.NoSerialPort">尚未選擇序列埠</s:String>
+    <s:String x:Key="St.SerialLinked">已連接序列埠 {0}</s:String>
+    <s:String x:Key="St.SerialOpenFailed">序列埠開啟失敗：{0}</s:String>
+    <s:String x:Key="St.IntifaceConnectFailed">Intiface 連線失敗：{0}</s:String>
+    <s:String x:Key="St.Scanning">掃描中…</s:String>
+    <s:String x:Key="St.ScanFailed">掃描失敗：{0}</s:String>
+</ResourceDictionary>

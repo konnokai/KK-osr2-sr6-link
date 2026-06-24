@@ -1,0 +1,96 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:s="clr-namespace:System;assembly=mscorlib">
+
+    <!-- nav / title bar -->
+    <s:String x:Key="L.ServerStopped">server stopped</s:String>
+    <s:String x:Key="L.Settings">Settings</s:String>
+    <s:String x:Key="L.RunServer">Run server</s:String>
+    <s:String x:Key="L.StopServer">Stop server</s:String>
+    <s:String x:Key="L.Home">Home</s:String>
+    <s:String x:Key="L.Scripter">Scripter</s:String>
+
+    <!-- home page -->
+    <s:String x:Key="L.LoadScene">load scene</s:String>
+    <s:String x:Key="L.NoSceneLoaded">no scene loaded</s:String>
+    <s:String x:Key="L.DevicesServerSetting">devices and server setting</s:String>
+    <s:String x:Key="L.SerialDevice">Serial device</s:String>
+    <s:String x:Key="L.ButtplugDevice">Buttplug device</s:String>
+    <s:String x:Key="L.Com">Com</s:String>
+    <s:String x:Key="L.BaudRate">BaudRate</s:String>
+    <s:String x:Key="L.DevicesList">Devices list</s:String>
+    <s:String x:Key="L.FeatureSelect">Feature select</s:String>
+    <s:String x:Key="L.WorkOnAxes">work on axes</s:String>
+    <s:String x:Key="L.IntifaceIp">Intiface Central webserver ip</s:String>
+    <s:String x:Key="L.Server">Server:</s:String>
+    <s:String x:Key="L.Port">Port</s:String>
+    <s:String x:Key="L.ResetDevices">reset devices (all axes → 500)</s:String>
+
+    <!-- scripter page -->
+    <s:String x:Key="L.ScripterEdit">scripter edit</s:String>
+    <s:String x:Key="L.Overview">Overview</s:String>
+    <s:String x:Key="L.GirlsList">girls_list</s:String>
+    <s:String x:Key="L.BoysList">boys_list</s:String>
+    <s:String x:Key="L.SelectPart">select part</s:String>
+    <s:String x:Key="L.LovemakingMode">lovemaking mode</s:String>
+    <s:String x:Key="L.Create">regenerate selected part</s:String>
+    <s:String x:Key="L.Generates">regenerate all parts</s:String>
+    <s:String x:Key="L.ShowCharas">show combobox charas</s:String>
+    <s:String x:Key="L.HideCharas">hide combobox charas</s:String>
+    <s:String x:Key="L.SelectOnSwitch">select the chara when switching combobox</s:String>
+    <s:String x:Key="L.OutputRange">output range</s:String>
+    <s:String x:Key="L.ConvertFunscript">converting sr6script files to funscript files</s:String>
+    <s:String x:Key="L.SaveScripter">save scripter</s:String>
+    <s:String x:Key="L.OpenFolders">open scripts folders</s:String>
+
+    <!-- settings page -->
+    <s:String x:Key="L.GameSetting">game setting</s:String>
+    <s:String x:Key="L.GameRoot">game root</s:String>
+    <s:String x:Key="L.ScripterEditSetting">scripter edit setting</s:String>
+    <s:String x:Key="L.RebuildAllDesc">rebuild points on all axes for the selected time period</s:String>
+    <s:String x:Key="L.Language">language</s:String>
+
+    <!-- code-set toggle / client states ({0}=address, {0}:{1}=ip:port) -->
+    <s:String x:Key="L.LinkSerial">Link serial</s:String>
+    <s:String x:Key="L.UnlinkSerial">Unlink serial</s:String>
+    <s:String x:Key="L.Connect">Connect</s:String>
+    <s:String x:Key="L.Disconnect">Disconnect</s:String>
+    <s:String x:Key="L.ClientDisconnected">client disconnected</s:String>
+    <s:String x:Key="L.LinkFrom">link from: {0}</s:String>
+    <s:String x:Key="L.Listening">listening {0}:{1}</s:String>
+
+    <!-- status bar messages ({0}=detail: count / name / error) -->
+    <s:String x:Key="St.GenerateNoScene">generate: no scene loaded</s:String>
+    <s:String x:Key="St.RegeneratedParts">regenerated axes for {0} parts</s:String>
+    <s:String x:Key="St.GenerateFailed">generate failed: {0}</s:String>
+    <s:String x:Key="St.CreateNoPart">create: no part selected</s:String>
+    <s:String x:Key="St.RecomputedPart">recomputed part{0}</s:String>
+    <s:String x:Key="St.CreateFailed">create failed: {0}</s:String>
+    <s:String x:Key="St.RebuildNoData">rebuild: no raw data for {0}</s:String>
+    <s:String x:Key="St.IntifaceConnected">Intiface connected</s:String>
+    <s:String x:Key="St.IntifaceDisconnected">Intiface disconnected</s:String>
+    <s:String x:Key="St.IntifaceError">Intiface: {0}</s:String>
+    <s:String x:Key="St.SerialError">Serial: {0}</s:String>
+    <s:String x:Key="St.ServerStartFailed">server start failed: {0}</s:String>
+    <s:String x:Key="St.SceneMessageError">scene message error: {0}</s:String>
+    <s:String x:Key="St.ScenePathNotUnder">scene path not under UserData/KK_osr_sr6_link/: {0}</s:String>
+    <s:String x:Key="St.OldOrEmptyScene">old-version or empty scene; re-collect with the latest plugin.</s:String>
+    <s:String x:Key="St.SceneNotFound">scene file not found: {0}</s:String>
+    <s:String x:Key="St.Loaded">loaded {0}</s:String>
+    <s:String x:Key="St.NoScene">no scene loaded</s:String>
+    <s:String x:Key="St.SavedScripts">saved scripts</s:String>
+    <s:String x:Key="St.SaveFailed">save failed: {0}</s:String>
+    <s:String x:Key="St.ExportedFunscripts">exported 6 funscripts</s:String>
+    <s:String x:Key="St.ExportFailed">export failed: {0}</s:String>
+    <s:String x:Key="St.OpenFolderFailed">open folder failed: {0}</s:String>
+    <s:String x:Key="St.PortScanFailed">port scan failed: {0}</s:String>
+    <s:String x:Key="St.ResetAxes">reset axes to 500</s:String>
+    <s:String x:Key="St.ResetFailed">reset failed: {0}</s:String>
+    <s:String x:Key="St.SerialClosed">serial closed</s:String>
+    <s:String x:Key="St.NoSerialPort">no serial port selected</s:String>
+    <s:String x:Key="St.SerialLinked">serial linked {0}</s:String>
+    <s:String x:Key="St.SerialOpenFailed">serial open failed: {0}</s:String>
+    <s:String x:Key="St.IntifaceConnectFailed">intiface connect failed: {0}</s:String>
+    <s:String x:Key="St.Scanning">scanning…</s:String>
+    <s:String x:Key="St.ScanFailed">scan failed: {0}</s:String>
+</ResourceDictionary>

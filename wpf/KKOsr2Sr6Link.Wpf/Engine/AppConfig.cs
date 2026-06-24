@@ -69,6 +69,13 @@ public sealed class AppConfig
         set { _ini.Set("Scripter edit", "rebuild all axes", value ? "1" : "0"); _ini.Save(); }
     }
 
+    /// <summary>UI language code ("en" / "zh-Hant"); drives <see cref="Localization.Loc"/>.</summary>
+    public string Language
+    {
+        get => _ini.Get("App", "language", "en");
+        set { _ini.Set("App", "language", value); _ini.Save(); }
+    }
+
     private static string AxisKey(int axis) => ((Axis)axis).ToString(); // 0..5 -> "L0".."R2"
 
     /// <summary>

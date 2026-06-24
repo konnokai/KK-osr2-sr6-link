@@ -85,6 +85,24 @@ public class IniConfigTests
     }
 
     [Fact]
+    public void Language_DefaultsEn_AndRoundTrips()
+    {
+        var path = TempPath();
+        try
+        {
+            var cfg = new AppConfig(path);
+            Assert.Equal("en", cfg.Language); // default
+
+            cfg.Language = "zh-Hant";
+            Assert.Equal("zh-Hant", cfg.Language);
+
+            var reload = new AppConfig(path);
+            Assert.Equal("zh-Hant", reload.Language);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public void AxisEnable_RoundTrips_AndDefaultsTrue()
     {
         var path = TempPath();

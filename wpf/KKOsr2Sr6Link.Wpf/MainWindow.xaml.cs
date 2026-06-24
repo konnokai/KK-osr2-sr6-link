@@ -31,6 +31,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        Localization.Loc.SetLanguage(_cfg.Language); // before InitializeComponent so DynamicResource resolves
         InitializeComponent();
         BuildScripterSurface();
         WireEvents();
@@ -107,9 +108,9 @@ public partial class MainWindow : Window
 
     private void Generate_Click(object s, RoutedEventArgs e)
     {
-        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0) { Status("generate: no scene loaded"); return; }
-        try { RegenerateScripter(); Status($"regenerated axes for {_sceneParts.Count} parts"); }
-        catch (Exception ex) { Status("generate failed: " + ex.Message); }
+        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0) { Status(L("St.GenerateNoScene")); return; }
+        try { RegenerateScripter(); Status(L("St.RegeneratedParts", _sceneParts.Count)); }
+        catch (Exception ex) { Status(L("St.GenerateFailed", ex.Message)); }
     }
 
     // Re-derive all six axes for every scene part from the captured raw streams,
@@ -164,16 +165,16 @@ public partial class MainWindow : Window
     {
         int p = PartList.SelectedIndex;
         if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0 || p < 0 || p >= _sceneParts.Count)
-        { Status("create: no part selected"); return; }
+        { Status(L("St.CreateNoPart")); return; }
         try
         {
             RegeneratePart(p, _editors[0].Values.Count);
             _overview.Values = _editors[0].Values;
             for (int a = 0; a < 6; a++) _editors[a].Refresh();
             _overview.Refresh();
-            Status($"recomputed part{p + 1}");
+            Status(L("St.RecomputedPart", p + 1));
         }
-        catch (Exception ex) { Status("create failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.CreateFailed", ex.Message)); }
     }
 
     // "rebuild selected times" from an axis editor: re-derive the selected frames from the
@@ -184,7 +185,7 @@ public partial class MainWindow : Window
         if (times.Count == 0 || _editors[0].Values.Count == 0) return;
         string charas = (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
         var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == charas);
-        if (d == null) { Status("rebuild: no raw data for " + charas); return; }
+        if (d == null) { Status(L("St.RebuildNoData", charas)); return; }
         string mode = (ModeList.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "normal";
         var (ins, su, sw, tw, ro, pi) = SourceStreams(d, mode);
         if (ins.Count == 0) return;
@@ -272,14 +273,14 @@ public partial class MainWindow : Window
     private void WireEvents()
     {
         _server.MessageReceived += msg => Dispatcher.Invoke(() => OnSceneMessage(msg));
-        _server.ClientConnected += () => Dispatcher.Invoke(() => ClientLabel.Text = "link from: " + _server.ClientAddress);
-        _server.ClientDisconnected += () => Dispatcher.Invoke(() => ClientLabel.Text = "client disconnected");
+        _server.ClientConnected += () => Dispatcher.Invoke(() => ClientLabel.Text = L("L.LinkFrom", _server.ClientAddress));
+        _server.ClientDisconnected += () => Dispatcher.Invoke(() => ClientLabel.Text = L("L.ClientDisconnected"));
 
         _buttplug.DevicesChanged += () => Dispatcher.Invoke(RefreshDeviceList);
-        _buttplug.Connected += () => Dispatcher.Invoke(() => Status("Intiface connected"));
-        _buttplug.Disconnected += () => Dispatcher.Invoke(() => Status("Intiface disconnected"));
-        _buttplug.Error += e => Dispatcher.Invoke(() => Status("Intiface: " + e));
-        _serial.Error += e => Dispatcher.Invoke(() => Status("Serial: " + e));
+        _buttplug.Connected += () => Dispatcher.Invoke(() => Status(L("St.IntifaceConnected")));
+        _buttplug.Disconnected += () => Dispatcher.Invoke(() => Status(L("St.IntifaceDisconnected")));
+        _buttplug.Error += e => Dispatcher.Invoke(() => Status(L("St.IntifaceError", e)));
+        _serial.Error += e => Dispatcher.Invoke(() => Status(L("St.SerialError", e)));
 
         _engine.Serial = _serial;
         _engine.Buttplug = _buttplug;
@@ -375,6 +376,7 @@ public partial class MainWindow : Window
         WebIpBox.Text = _cfg.WebServerIp;
         GameRootBox.Text = _cfg.GameRoot;
         RebuildAllCheck.IsChecked = _cfg.RebuildAllAxes;
+        SelectComboByTag(LanguageList, _cfg.Language); // fires Language_Changed (idempotent)
 
         // Per-axis output range + enable come from config.ini, not the scene scripts.
         for (int a = 0; a < 6; a++)
@@ -395,6 +397,21 @@ public partial class MainWindow : Window
 
     // ---------- navigation / title bar ----------
 
+    // Language selector (PageSettings): swap the live string dictionary + persist.
+    private void Language_Changed(object s, SelectionChangedEventArgs e)
+    {
+        string lang = (LanguageList.SelectedItem as ComboBoxItem)?.Tag as string ?? "en";
+        Localization.Loc.SetLanguage(lang);
+        _cfg.Language = lang;
+    }
+
+    private static void SelectComboByTag(ComboBox combo, string tag)
+    {
+        foreach (var it in combo.Items)
+            if ((it as ComboBoxItem)?.Tag as string == tag) { combo.SelectedItem = it; return; }
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+    }
+
     private void NavHome_Click(object s, RoutedEventArgs e) => ShowPage(PageHome);
     private void NavScripter_Click(object s, RoutedEventArgs e) { ShowPage(PageScripter); FitCurrentSurface(); }
     private void NavSettings_Click(object s, RoutedEventArgs e) => ShowPage(PageSettings);
@@ -414,16 +431,16 @@ public partial class MainWindow : Window
     private void RunServer_Click(object s, RoutedEventArgs e)
     {
         Debounce(RunServerBtn);
-        if (_serverRunning) { _server.Stop(); _serverRunning = false; RunServerBtn.Content = "Run server"; ClientLabel.Text = "server stopped"; return; }
+        if (_serverRunning) { _server.Stop(); _serverRunning = false; RunServerBtn.Content = L("L.RunServer"); ClientLabel.Text = L("L.ServerStopped"); return; }
         try
         {
             int port = int.TryParse(ServerPortBox.Text, out var p) ? p : 8000;
             _server.Start(ServerIpBox.Text, port);
             _serverRunning = true;
-            RunServerBtn.Content = "Stop server";
-            ClientLabel.Text = $"listening {ServerIpBox.Text}:{port}";
+            RunServerBtn.Content = L("L.StopServer");
+            ClientLabel.Text = L("L.Listening", ServerIpBox.Text, port);
         }
-        catch (Exception ex) { Status("server start failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.ServerStartFailed", ex.Message)); }
     }
 
     private void OnSceneMessage(SceneMessage msg)
@@ -459,7 +476,7 @@ public partial class MainWindow : Window
             int part = PartIndexForLine(index);
             if (part != PartList.SelectedIndex) PartList.SelectedIndex = part; // drives OnPartSelected (guarded)
         }
-        catch (Exception ex) { Status("scene message error: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.SceneMessageError", ex.Message)); }
     }
 
     // Which scene part contains a given playback line (parts are ordered, each begins at .Part).
@@ -520,7 +537,7 @@ public partial class MainWindow : Window
             path = GameRootBox.Text + path.Substring(idx);
         else if (idx == -1)
         {
-            Status("scene path not under UserData/KK_osr_sr6_link/: " + rawPath);
+            Status(L("St.ScenePathNotUnder", rawPath));
             return;
         }
 
@@ -552,7 +569,7 @@ public partial class MainWindow : Window
             var scene = SceneTxtParser.Parse(File.ReadAllText(path));
             if (!scene.IsNewVersion || scene.Data.Count == 0)
             {
-                Status("old-version or empty scene; re-collect with the latest plugin.");
+                Status(L("St.OldOrEmptyScene"));
                 return;
             }
             _lovemakingDatas = scene.Data;
@@ -572,7 +589,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            Status("scene file not found: " + path);
+            Status(L("St.SceneNotFound", path));
             return;
         }
 
@@ -594,7 +611,7 @@ public partial class MainWindow : Window
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
         _overview.Refresh();
         FitCurrentSurface(); // default zoom = fill the visible width (N1)
-        Status("loaded " + Path.GetFileName(path));
+        Status(L("St.Loaded", Path.GetFileName(path)));
     }
 
     private void SaveScripter(string path)
@@ -617,14 +634,14 @@ public partial class MainWindow : Window
 
     private void Save_Click(object s, RoutedEventArgs e)
     {
-        if (_filePath == "") { Status("no scene loaded"); return; }
-        try { SaveScripter(ResolvedPath()); Status("saved scripts"); }
-        catch (Exception ex) { Status("save failed: " + ex.Message); }
+        if (_filePath == "") { Status(L("St.NoScene")); return; }
+        try { SaveScripter(ResolvedPath()); Status(L("St.SavedScripts")); }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
     }
 
     private void Convert_Click(object s, RoutedEventArgs e)
     {
-        if (_filePath == "") { Status("no scene loaded"); return; }
+        if (_filePath == "") { Status(L("St.NoScene")); return; }
         try
         {
             string path = ResolvedPath();
@@ -632,9 +649,9 @@ public partial class MainWindow : Window
             int refCount = _editors[0].Values.Count;
             for (int a = 0; a < 6; a++)
                 SceneFiles.ExportFunscript(AxisInfo.FunscriptPath(path, (Axis)a), _editors[a].Values, refCount);
-            Status("exported 6 funscripts");
+            Status(L("St.ExportedFunscripts"));
         }
-        catch (Exception ex) { Status("export failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.ExportFailed", ex.Message)); }
     }
 
     private void OpenFolder_Click(object s, RoutedEventArgs e)
@@ -646,7 +663,7 @@ public partial class MainWindow : Window
             if (dir != null && Directory.Exists(dir))
                 System.Diagnostics.Process.Start("explorer.exe", dir);
         }
-        catch (Exception ex) { Status("open folder failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.OpenFolderFailed", ex.Message)); }
     }
 
     private void ShowChars_Click(object s, RoutedEventArgs e) => _server.SendShow(GirlList.Text, BoyList.Text);
@@ -662,44 +679,44 @@ public partial class MainWindow : Window
             foreach (var p in SerialOutput.AvailablePorts()) PortList.Items.Add(p);
             if (PortList.Items.Count > 0) PortList.SelectedIndex = 0;
         }
-        catch (Exception ex) { Status("port scan failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.PortScanFailed", ex.Message)); }
     }
 
     // Send every axis to mid (500) on the connected outputs (N2).
     private void Reset_Click(object s, RoutedEventArgs e)
     {
-        try { _engine.ResetAll(); Status("reset axes to 500"); }
-        catch (Exception ex) { Status("reset failed: " + ex.Message); }
+        try { _engine.ResetAll(); Status(L("St.ResetAxes")); }
+        catch (Exception ex) { Status(L("St.ResetFailed", ex.Message)); }
     }
 
     private void LinkSerial_Click(object s, RoutedEventArgs e)
     {
         Debounce(LinkSerialBtn);
-        if (_serial.IsOpen) { _serial.Close(); LinkSerialBtn.Content = "Link serial"; Status("serial closed"); return; }
-        if (PortList.SelectedItem is not string port) { Status("no serial port selected"); return; }
+        if (_serial.IsOpen) { _serial.Close(); LinkSerialBtn.Content = L("L.LinkSerial"); Status(L("St.SerialClosed")); return; }
+        if (PortList.SelectedItem is not string port) { Status(L("St.NoSerialPort")); return; }
         try
         {
             int baud = int.TryParse(BaudBox.Text, out var b) ? b : 115200;
             _serial.Open(port, baud);
-            LinkSerialBtn.Content = "Unlink serial";
-            Status("serial linked " + port);
+            LinkSerialBtn.Content = L("L.UnlinkSerial");
+            Status(L("St.SerialLinked", port));
         }
-        catch (Exception ex) { Status("serial open failed: " + ex.Message); }
+        catch (Exception ex) { Status(L("St.SerialOpenFailed", ex.Message)); }
     }
 
     // ---------- intiface ----------
 
     private async void LinkIntiface_Click(object s, RoutedEventArgs e)
     {
-        if (_buttplug.IsConnected) { await _buttplug.DisconnectAsync(); LinkIntifaceBtn.Content = "Connect"; return; }
-        try { await _buttplug.ConnectAsync(WebIpBox.Text); LinkIntifaceBtn.Content = "Disconnect"; }
-        catch (Exception ex) { Status("intiface connect failed: " + ex.Message); }
+        if (_buttplug.IsConnected) { await _buttplug.DisconnectAsync(); LinkIntifaceBtn.Content = L("L.Connect"); return; }
+        try { await _buttplug.ConnectAsync(WebIpBox.Text); LinkIntifaceBtn.Content = L("L.Disconnect"); }
+        catch (Exception ex) { Status(L("St.IntifaceConnectFailed", ex.Message)); }
     }
 
     private async void Rescan_Click(object s, RoutedEventArgs e)
     {
-        try { await _buttplug.StartScanningAsync(); Status("scanning…"); }
-        catch (Exception ex) { Status("scan failed: " + ex.Message); }
+        try { await _buttplug.StartScanningAsync(); Status(L("St.Scanning")); }
+        catch (Exception ex) { Status(L("St.ScanFailed", ex.Message)); }
     }
 
     private void RefreshDeviceList()
@@ -735,6 +752,10 @@ public partial class MainWindow : Window
     }
 
     private void Status(string text) => StatusBar.Text = text;
+
+    // Short aliases for the localized-string lookup (Localization.Loc.T).
+    private static string L(string key) => Localization.Loc.T(key);
+    private static string L(string key, params object[] args) => Localization.Loc.T(key, args);
 
     // Briefly disable a button after a click to swallow accidental double-clicks
     // (mirrors Qt delay_change1/2 + timer1/2, interval 3000ms).
