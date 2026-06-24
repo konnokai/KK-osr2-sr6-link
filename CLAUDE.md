@@ -6,10 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Links Koikatu/CharaStudio sex scenes to OSR2/SR6 (and other linear) hardware. Two **independent** programs that talk over a TCP socket:
 
-1. **C# BepInEx plugin** (`Osr2_sr6_link.cs`) — runs *inside* CharaStudio. Samples character bone positions during animations and streams 6-axis motion to the Qt app.
+1. **C# BepInEx plugin** (`Osr2_sr6_link.cs`) — runs *inside* CharaStudio. Samples character bone positions during animations and streams 6-axis motion to the desktop app.
 2. **Qt C++ desktop app** (`mainwindow.cpp` + widgets) — receives the motion, lets the user edit it, and drives hardware over serial / Intiface (Buttplug) / funscript export.
 
-There is no shared code between them; the socket is the only contract. The two also have separate project files (`.csproj`/`.sln` for C#, `.pro` for Qt) — they are built with different toolchains.
+There is no shared code between the plugin and the app; the socket is the only contract. They have separate project files (`.csproj`/`.sln` for C#, `.pro` for Qt) built with different toolchains.
+
+A third component, the **WPF/.NET 8 desktop app** (`wpf/`), is a port of the Qt app being brought to parity with it (it speaks the same socket protocol and reads the same `config.ini`). See "WPF app" below.
 
 ## Build
 
@@ -21,7 +23,8 @@ There is no shared code between them; the socket is the only contract. The two a
 - Build with MSBuild / Visual Studio. Debug config writes the DLL straight into a local game install at `..\..\..\galgame\kk\Koikatu\BepInEx\plugins\` — that path is hardcoded and will only work on the original author's machine; adjust `<OutputPath>` if building elsewhere.
 - References (`Assembly-CSharp`, `BepInEx`, `KKAPI`, `Timeline`, `UnityEngine`, `0Harmony`) all resolve via `HintPath` into that same game install. No NuGet.
 
-No test suite exists for either component.
+**WPF app** (`wpf/KKOsr2Sr6Link.Wpf/KKOsr2Sr6Link.Wpf.csproj`, .NET 8, `dotnet build` / `dotnet run`):
+- xUnit tests in `wpf/KKOsr2Sr6Link.Tests/` — `dotnet test`. The plugin and Qt app have no tests; the WPF app does.
 
 ## Communication contract
 
@@ -45,6 +48,16 @@ Hardware outputs:
 - **Serial** (`QSerialPort`) — TCode to OSR2/SR6.
 - **Intiface Central / Buttplug** (`QWebSocket`, default `ws://localhost:12345`) — Handy and other linear devices; device list managed via the `Device` struct.
 - **Funscript export** — `convertsr6sToFunscript()` writes per-axis `.funscript` files.
+
+## WPF app
+
+Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the shell; `Engine/` holds the non-UI logic (`LinkServer`, `SerialOutput`, `ButtplugClient`, `PlaybackEngine`, `AppConfig` over `IniConfig`, scene parsing), `Controls/` the custom widgets (`RangeSlider`, `OverviewEdit`, `ScripterEdit`). Method comments cite the `mainwindow.cpp` lines they mirror — keep that cross-reference when porting more.
+
+**Localization** (`Localization/`) — runtime UI language switch, no restart:
+- Strings live in swappable `ResourceDictionary` files `Strings.<lang>.xaml` (`en`, `zh-Hant`). XAML binds them with `{DynamicResource L.*}` (static UI) / `{DynamicResource St.*}` (status messages); swapping the merged dictionary updates everything live.
+- `Loc.SetLanguage(lang)` swaps the dictionary; `Loc.T(key)` / `Loc.T(key, args)` resolve a string (or format one) from code. `MainWindow` aliases these as `L(...)`.
+- Persisted in `config.ini` `[App]/language`; applied in the `MainWindow` ctor **before** `InitializeComponent` so `DynamicResource` resolves. The selector lives on PageSettings (`Language_Changed`).
+- Adding a string: add the key to **both** dictionaries (a missing key falls back to the key text). Do **not** localize strings used as logic keys — lovemaking-mode values (`normal`/`blowjob`/…) and axis names (`L0`–`R2`) are matched/saved by their literal text.
 
 ## Conventions / gotchas
 
