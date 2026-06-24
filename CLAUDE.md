@@ -6,20 +6,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Links Koikatu/CharaStudio sex scenes to OSR2/SR6 (and other linear) hardware. Two **independent** programs that talk over a TCP socket:
 
-1. **C# BepInEx plugin** (`Osr2_sr6_link.cs`) — runs *inside* CharaStudio. Samples character bone positions during animations and streams 6-axis motion to the desktop app.
-2. **Qt C++ desktop app** (`mainwindow.cpp` + widgets) — receives the motion, lets the user edit it, and drives hardware over serial / Intiface (Buttplug) / funscript export.
+1. **C# BepInEx plugin** (`plugin/Osr2_sr6_link.cs`) — runs *inside* CharaStudio. Samples character bone positions during animations and streams 6-axis motion to the desktop app.
+2. **Qt C++ desktop app** (`qt/mainwindow.cpp` + widgets) — receives the motion, lets the user edit it, and drives hardware over serial / Intiface (Buttplug) / funscript export.
 
 There is no shared code between the plugin and the app; the socket is the only contract. They have separate project files (`.csproj`/`.sln` for C#, `.pro` for Qt) built with different toolchains.
 
 A third component, the **WPF/.NET 8 desktop app** (`wpf/`), is a port of the Qt app being brought to parity with it (it speaks the same socket protocol and reads the same `config.ini`). See "WPF app" below.
 
+## Repository layout
+
+One folder per component (file paths below are written relative to these):
+
+- `qt/` — Qt C++ desktop app (`.pro`, `main.cpp`, `mainwindow.*`, the custom widgets, `mainwindow.qrc` + `icons/`).
+- `plugin/` — C# BepInEx plugin (`Osr2_sr6_link.cs`, `kk_osr2_sr6_link.csproj`/`.sln`, `Properties/`).
+- `wpf/` — WPF/.NET 8 app (`KKOsr2Sr6Link.Wpf/` app + `KKOsr2Sr6Link.Tests/`).
+
 ## Build
 
-**Qt app** (qmake project `Link_osr2_sr6_to_kk_studio.pro`):
+**Qt app** (qmake project `qt/Link_osr2_sr6_to_kk_studio.pro`):
 - Open in Qt Creator, or: `qmake && make` (Qt 6, `core gui network serialport websockets widgets`, C++17).
 - The `.pro` is the source of truth for which `.cpp`/`.ui`/`.qrc` files compile — `.sln`/`.csproj` are *not* for the Qt code.
 
-**C# plugin** (`kk_osr2_sr6_link.csproj`, .NET Framework **3.5**, output type Library):
+**C# plugin** (`plugin/kk_osr2_sr6_link.csproj`, .NET Framework **3.5**, output type Library):
 - Build with MSBuild / Visual Studio. Debug config writes the DLL straight into a local game install at `..\..\..\galgame\kk\Koikatu\BepInEx\plugins\` — that path is hardcoded and will only work on the original author's machine; adjust `<OutputPath>` if building elsewhere.
 - References (`Assembly-CSharp`, `BepInEx`, `KKAPI`, `Timeline`, `UnityEngine`, `0Harmony`) all resolve via `HintPath` into that same game install. No NuGet.
 
