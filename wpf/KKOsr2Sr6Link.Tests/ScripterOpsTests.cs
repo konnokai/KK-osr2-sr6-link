@@ -25,6 +25,16 @@ public class ScripterOpsTests
     }
 
     [Fact]
+    public void SelectSinglePart_MiddleAndEdgeParts()
+    {
+        var splits = new List<int> { 3, 6 }; // parts: [0..3], [3..6], [6..9]
+        Assert.Equal(new List<int> { 0, 1, 2, 3 }, ScripterOps.SelectSinglePart(10, splits, 0));   // first part
+        Assert.Equal(new List<int> { 3, 4, 5, 6 }, ScripterOps.SelectSinglePart(10, splits, 3));   // middle part
+        Assert.Equal(new List<int> { 6, 7, 8, 9 }, ScripterOps.SelectSinglePart(10, splits, 6));   // last part
+        Assert.Equal(new List<int> { 0, 1, 2, 3, 4 }, ScripterOps.SelectSinglePart(5, new List<int>(), 0)); // no splits = whole curve
+    }
+
+    [Fact]
     public void DeleteSelected_KeepsEndpoints()
     {
         var values = new List<int> { 10, 20, 30, 40 };

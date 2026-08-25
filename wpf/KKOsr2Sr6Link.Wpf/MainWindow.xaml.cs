@@ -320,6 +320,7 @@ public partial class MainWindow : Window
         _overview.SelectedPart = part == 0 ? 0
             : (part - 1 < _overview.SplitLines.Count ? _overview.SplitLines[part - 1] : 0);
         _overview.InvalidateVisual();
+        for (int a = 0; a < 6; a++) { _editors[a].SelectedPart = _overview.SelectedPart; _editors[a].InvalidateVisual(); }
 
         _syncingPart = true;
         SelectComboItem(ModeList, _sceneParts[part].LovemakingMode);
@@ -605,6 +606,7 @@ public partial class MainWindow : Window
         // overview tracks L0; split lines from parts (skip first)
         _overview.Values = _editors[0].Values;
         _overview.SplitLines = _sceneParts.Skip(1).Select(p => p.Part).ToList();
+        for (int a = 0; a < 6; a++) _editors[a].SplitLines = _overview.SplitLines; // shared ref: in-place add/del reflect on every tab
         RebuildPartList();
         if (PartList.Items.Count > 0) PartList.SelectedIndex = 0;
 

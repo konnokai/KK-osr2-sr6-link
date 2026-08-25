@@ -32,10 +32,18 @@ public sealed class ScripterEdit : FrameworkElement
     private static readonly Brush RubberFill = Freeze(Color.FromArgb(40, 255, 121, 198));
     private static readonly Pen RubberPen = FreezePen(Color.FromRgb(255, 121, 198), 1);
     private static readonly Brush White = Freeze(Colors.White);
+    private static readonly Brush PartBox = Freeze(Color.FromRgb(58, 65, 82));
+    private static readonly Pen SplitPen = FreezePen(Color.FromArgb(255, 220, 220, 200), 3);
 
     public List<int> Values { get; set; } = new() { 0, 500, 999 };
     public int SelectedLine { get; set; }
     public int Intervals { get; private set; } = 100;
+
+    /// <summary>Part boundaries shared with the OverviewEdit; rendered as split lines + a highlight box
+    /// so the overview's parts are visible on every axis tab. <see cref="SelectedPart"/> is the split value
+    /// that opens the highlighted part (0 = first part).</summary>
+    public List<int> SplitLines { get; set; } = new();
+    public int SelectedPart { get; set; }
 
     private readonly List<int> _selected = new();
     private readonly List<int> _selectedTimes = new();
@@ -109,6 +117,22 @@ public sealed class ScripterEdit : FrameworkElement
         double w = ActualWidth, h = ActualHeight;
         dc.DrawRectangle(Bg, null, new Rect(0, 0, w, h));
 
+        // selected-part highlight box (mirrors OverviewEdit so parts are visible on every axis tab)
+        if (SplitLines.Count == 0)
+            dc.DrawRectangle(PartBox, null, new Rect(Pad + _valueEdge, Pad, Math.Max(0, w - Pad * 2), h - Pad * 2));
+        else if (SelectedPart == SplitLines[^1])
+            dc.DrawRectangle(PartBox, null, new Rect(_valueEdge + Intervals * SelectedPart + Pad, Pad,
+                Math.Max(0, w - 2 * Pad - _valueEdge - Intervals * SelectedPart), h - 2 * Pad));
+        else if (SelectedPart == 0)
+            dc.DrawRectangle(PartBox, null, new Rect(Pad + _valueEdge, Pad, Intervals * SplitLines[0], h - 2 * Pad));
+        else
+        {
+            int idx = SplitLines.IndexOf(SelectedPart);
+            if (idx >= 0 && idx + 1 < SplitLines.Count)
+                dc.DrawRectangle(PartBox, null, new Rect(_valueEdge + Intervals * SelectedPart + Pad, Pad,
+                    Intervals * (SplitLines[idx + 1] - SelectedPart), h - 2 * Pad));
+        }
+
         // value polyline + selected segments
         for (int i = 1; i < Values.Count; i++)
         {
@@ -139,6 +163,7 @@ public sealed class ScripterEdit : FrameworkElement
             int x = X(i);
             Pen grid = _rebuildTimes.Contains(i) ? GridRebuild : _selectedTimes.Contains(i) ? GridFull : GridDim;
             dc.DrawLine(grid, new Point(x, _valueEdge + Pad), new Point(x, h - Pad - _valueEdge));
+            if (SplitLines.Contains(i)) dc.DrawLine(SplitPen, new Point(x, 0), new Point(x, h));
 
             if ((i == 0 || i == Values.Count - 1 || i % 5 == 0) && Intervals >= 30)
             {
@@ -447,6 +472,16 @@ public sealed class ScripterEdit : FrameworkElement
     private void DoSelectValleys() { Clean(); var r = ScripterOps.SelectValleys(Values, _selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
     private void DoSelectMidpoints() { Clean(); var r = ScripterOps.SelectMidpoints(Values, _selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
     private void DoSelectInterval() { Clean(); var r = ScripterOps.SelectInterval(_selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
+    private void DoSelectSinglePart()
+    {
+        _selected.Clear(); _selectedTimes.Clear();
+        foreach (var i in ScripterOps.SelectSinglePart(Values.Count, SplitLines, SelectedPart))
+        {
+            _selectedTimes.Add(i);
+            if (Values[i] != -1) _selected.Add(i);
+        }
+        InvalidateVisual();
+    }
 
     private void DoDelete() { var snap = new List<int>(Values); ScripterOps.DeleteSelected(Values, _selected); if (!snap.SequenceEqual(Values)) PushUndo(snap); _selected.Clear(); InvalidateVisual(); }
     private void DoAddLines() { var snap = new List<int>(Values); ScripterOps.AddSelectedLines(Values, _selectedTimes); if (!snap.SequenceEqual(Values)) PushUndo(snap); InvalidateVisual(); }
@@ -489,6 +524,7 @@ public sealed class ScripterEdit : FrameworkElement
         Add("select down points (Ctrl+3)", DoSelectValleys);
         Add("change selected point values", DoChangeValues);
         Add("select intervals points", DoSelectInterval);
+        Add("select single part", DoSelectSinglePart);
         Add("remove duplicate stacks (Ctrl+F)", DoRemoveDuplicateStacks);
         Add("delete selected point (Ctrl+D)", DoDelete);
         Add("rebuild selected times", DoRebuild);

@@ -190,6 +190,23 @@ public static class ScripterOps
         }
     }
 
+    /// <summary>Frame indices [start..end] of the part that <paramref name="selectedPart"/> opens, given the
+    /// sorted <paramref name="splitLines"/> (part boundaries) and curve length. start is the part's left
+    /// boundary (0 for the first part), end its right boundary (last index for the final part). Matches the
+    /// part the OverviewEdit highlight box covers. Empty when there are no frames.</summary>
+    public static List<int> SelectSinglePart(int count, IList<int> splitLines, int selectedPart)
+    {
+        var r = new List<int>();
+        if (count <= 0) return r;
+        int last = count - 1;
+        int idx = splitLines.IndexOf(selectedPart);
+        int start, end;
+        if (selectedPart <= 0 || idx < 0) { start = 0; end = splitLines.Count > 0 ? splitLines[0] : last; }
+        else { start = selectedPart; end = idx + 1 < splitLines.Count ? splitLines[idx + 1] : last; }
+        for (int i = start; i <= end && i <= last; i++) r.Add(i);
+        return r;
+    }
+
     /// <summary>Move selected points horizontally by delta, blanking the originals. Returns new selection.</summary>
     public static List<int>? MoveHorizontal(List<int> values, List<int> oldValues, List<int> selected, List<int> oldSelected, int delta)
     {
