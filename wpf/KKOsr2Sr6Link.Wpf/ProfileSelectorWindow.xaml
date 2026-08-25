@@ -1,0 +1,62 @@
+<Window x:Class="KKOsr2Sr6Link.Wpf.ProfileSelectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource L.ProfileGalleryTitle}"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Fg}"
+        ResizeMode="CanResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ItemsControl x:Name="ProfileGrid">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="4" Rows="3"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemContainerStyle>
+                <Style TargetType="ContentPresenter">
+                    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                    <Setter Property="VerticalAlignment" Value="Stretch"/>
+                </Style>
+            </ItemsControl.ItemContainerStyle>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Button Click="ProfileTile_Click" Padding="0" Margin="7" Background="#252B33"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                        <Border x:Name="TileBorder" BorderBrush="#4A5160" BorderThickness="1" CornerRadius="4" ClipToBounds="True">
+                            <Grid>
+                                <TextBlock Text="{DynamicResource L.NoProfilePreview}" HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" Foreground="#8C96A5"/>
+                                <Image Source="{Binding Preview}" Stretch="UniformToFill"/>
+                                <Border VerticalAlignment="Bottom" Background="#CC20252C" Padding="8,5">
+                                    <TextBlock Text="{Binding Key}" TextTrimming="CharacterEllipsis" FontSize="14"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Button>
+                    <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                            <Setter TargetName="TileBorder" Property="BorderBrush" Value="{StaticResource Accent}"/>
+                            <Setter TargetName="TileBorder" Property="BorderThickness" Value="3"/>
+                        </DataTrigger>
+                    </DataTemplate.Triggers>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Grid Grid.Row="1" Margin="7,8,7,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button x:Name="PreviousPageButton" Grid.Column="0" Content="{DynamicResource L.PreviousPage}" Click="PreviousPage_Click"/>
+            <TextBlock x:Name="PageLabel" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+            <Button x:Name="NextPageButton" Grid.Column="2" Content="{DynamicResource L.NextPage}" Click="NextPage_Click"/>
+        </Grid>
+    </Grid>
+</Window>

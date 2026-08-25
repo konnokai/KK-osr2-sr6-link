@@ -24,8 +24,16 @@ public partial class MainWindow : Window
     private CheckBox[] _enables = Array.Empty<CheckBox>();
 
     private string _filePath = "";   // resolved scene .txt path currently loaded
+    private string _rawDataPath = "";
     private List<ScenePart> _sceneParts = new();
     private List<LovemakingData> _lovemakingDatas = new(); // raw captured streams, for "generates"
+    private SceneActionSource _actionSource;
+    private string _profileKey = "";
+    private string _cardProfileKey = "";
+    private string _selectedProfileKey = "";
+    private List<string> _profiles = new();
+    private bool _bindingNeedsSceneSave;
+    private bool _invalidPlaybackIndexReported;
     private bool _syncingPart; // true while pushing a part's values into the combos (suppresses write-back)
     private bool _serverRunning;
 
@@ -108,7 +116,7 @@ public partial class MainWindow : Window
 
     private void Generate_Click(object s, RoutedEventArgs e)
     {
-        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0) { Status(L("St.GenerateNoScene")); return; }
+        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0) { Status(L("St.RawUnavailable")); return; }
         try { RegenerateScripter(); Status(L("St.RegeneratedParts", _sceneParts.Count)); }
         catch (Exception ex) { Status(L("St.GenerateFailed", ex.Message)); }
     }
@@ -131,7 +139,7 @@ public partial class MainWindow : Window
         int partBegin = _sceneParts[p].Part;
         int partEnd = (p == _sceneParts.Count - 1) ? len : _sceneParts[p + 1].Part;
 
-        var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == _sceneParts[p].Charas);
+        var d = FindLovemakingData(_sceneParts[p].Charas);
         if (d == null) return;
         var (ins, su, sw, tw, ro, pi) = SourceStreams(d, _sceneParts[p].LovemakingMode);
 
@@ -164,7 +172,8 @@ public partial class MainWindow : Window
     private void CreatePart_Click(object s, RoutedEventArgs e)
     {
         int p = PartList.SelectedIndex;
-        if (_lovemakingDatas.Count == 0 || _editors[0].Values.Count == 0 || p < 0 || p >= _sceneParts.Count)
+        if (_lovemakingDatas.Count == 0) { Status(L("St.RawUnavailable")); return; }
+        if (_editors[0].Values.Count == 0 || p < 0 || p >= _sceneParts.Count)
         { Status(L("St.CreateNoPart")); return; }
         try
         {
@@ -182,9 +191,10 @@ public partial class MainWindow : Window
     // Mirrors mainwindow.cpp update_list (1939-2086).
     private void OnRebuildTimes(int axis, List<int> times)
     {
+        if (_lovemakingDatas.Count == 0) { Status(L("St.RawUnavailable")); return; }
         if (times.Count == 0 || _editors[0].Values.Count == 0) return;
-        string charas = (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
-        var d = _lovemakingDatas.FirstOrDefault(x => x.CharasName == charas);
+        string charas = ComposePairLabel();
+        var d = FindLovemakingData(charas);
         if (d == null) { Status(L("St.RebuildNoData", charas)); return; }
         string mode = (ModeList.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "normal";
         var (ins, su, sw, tw, ro, pi) = SourceStreams(d, mode);
@@ -242,6 +252,17 @@ public partial class MainWindow : Window
             "handjobR"  => (d.HandjobRInserts,  d.HandjobRSurges,  d.HandjobRSways,  d.HandjobRTwists,  d.HandjobRRolls,  d.HandjobRPitchs),
             _           => (d.Inserts,          d.Surges,          d.Sways,          d.Twists,          d.Rolls,          d.Pitchs),
         };
+
+    private LovemakingData? FindLovemakingData(string charas)
+    {
+        string key = CharacterPair.Normalize(charas);
+        return string.IsNullOrEmpty(key)
+            ? null
+            : _lovemakingDatas.FirstOrDefault(x => CharacterPair.Normalize(x.CharasName) == key);
+    }
+
+    private string ComposePairLabel()
+        => (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
 
     // Serial device / Buttplug device tab toggle.
     private void DeviceTab_Checked(object sender, RoutedEventArgs e)
@@ -308,7 +329,7 @@ public partial class MainWindow : Window
         if (_syncingPart) return;
         int p = PartList.SelectedIndex;
         if (p >= 0 && p < _sceneParts.Count)
-            _sceneParts[p].Charas = (GirlList.SelectedItem as string ?? "") + "-" + (BoyList.SelectedItem as string ?? "");
+            _sceneParts[p].Charas = ComposePairLabel();
         // only push to the game when the user opted in
         if (SelectOnSwitchCheck.IsChecked == true && source.SelectedItem is string c) _server.SendSelectChara(c);
     }
@@ -324,8 +345,8 @@ public partial class MainWindow : Window
 
         _syncingPart = true;
         SelectComboItem(ModeList, _sceneParts[part].LovemakingMode);
-        var charas = _sceneParts[part].Charas.Split('-');
-        if (charas.Length == 2) { GirlList.SelectedItem = charas[0]; BoyList.SelectedItem = charas[1]; }
+        if (CharacterPair.TrySplitLabels(_sceneParts[part].Charas, out var female, out var male))
+        { GirlList.SelectedItem = female; BoyList.SelectedItem = male; }
         _syncingPart = false;
     }
 
@@ -392,8 +413,9 @@ public partial class MainWindow : Window
         ServerIpBox.LostFocus += (_, _) => _cfg.ServerIp = ServerIpBox.Text;
         ServerPortBox.LostFocus += (_, _) => _cfg.ServerPort = ServerPortBox.Text;
         WebIpBox.LostFocus += (_, _) => _cfg.WebServerIp = WebIpBox.Text;
-        GameRootBox.LostFocus += (_, _) => _cfg.GameRoot = GameRootBox.Text;
+        GameRootBox.LostFocus += (_, _) => { _cfg.GameRoot = GameRootBox.Text; RefreshProfileList(); UpdateProfileUi(); };
         RebuildAllCheck.Click += (_, _) => _cfg.RebuildAllAxes = RebuildAllCheck.IsChecked == true;
+        UpdateProfileUi();
     }
 
     // ---------- navigation / title bar ----------
@@ -404,6 +426,7 @@ public partial class MainWindow : Window
         string lang = (LanguageList.SelectedItem as ComboBoxItem)?.Tag as string ?? "en";
         Localization.Loc.SetLanguage(lang);
         _cfg.Language = lang;
+        UpdateProfileUi();
     }
 
     private static void SelectComboByTag(ComboBox combo, string tag)
@@ -448,11 +471,20 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (_filePath != msg.Path)
-                LoadScene(msg.Path);
+            if (_filePath != msg.Path || _cardProfileKey != msg.ProfileKey)
+                LoadScene(msg.Path, msg.ProfileKey);
 
             int index = msg.Index;
-            if (_editors[0].Values.Count == 0 || index + 1 >= _editors[0].Values.Count) return;
+            if (_actionSource == SceneActionSource.None || _editors[0].Values.Count == 0) return;
+            if (index < 0 || index >= _editors[0].Values.Count)
+            {
+                if (!_invalidPlaybackIndexReported)
+                {
+                    _invalidPlaybackIndexReported = true;
+                    Status(L("St.PlaybackIndexOutOfRange", index));
+                }
+                return;
+            }
 
             // keep engine pointed at the live editor data + ranges
             for (int a = 0; a < 6; a++)
@@ -508,136 +540,291 @@ public partial class MainWindow : Window
 
     // ---------- scene load / save ----------
 
-    private void LoadScene(string rawPath)
+    private void LoadScene(string rawPath, string cardProfileKey = "")
     {
-        string path = rawPath;
-
-        // preview image: KK_osr_sr6_link -> Studio/scene, .txt -> .png
-        try
-        {
-            string previewPath = path.Replace("KK_osr_sr6_link", "Studio/scene").Replace(".txt", ".png");
-            if (File.Exists(previewPath))
-            {
-                // OnLoad reads the whole image now and releases the file handle,
-                // instead of streaming lazily and keeping the .png locked.
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
-                bmp.UriSource = new Uri(previewPath);
-                bmp.EndInit();
-                ScenePreview.Source = bmp;
-            }
-        }
-        catch { /* preview is best-effort */ }
-
-        // resolve path against game root (mirrors server_read:864-873)
-        const string search = "/UserData/KK_osr_sr6_link/";
-        int idx = path.IndexOf(search, StringComparison.Ordinal);
-        if (idx != -1 && !string.IsNullOrEmpty(GameRootBox.Text))
-            path = GameRootBox.Text + path.Substring(idx);
-        else if (idx == -1)
-        {
-            Status(L("St.ScenePathNotUnder", rawPath));
-            return;
-        }
+        string path = ResolveScenePath(rawPath);
+        if (string.IsNullOrEmpty(path)) return;
 
         _filePath = rawPath; // keep raw as the identity used by the plugin
+        _rawDataPath = "";
+        _cardProfileKey = cardProfileKey ?? "";
+        _profileKey = "";
+        _selectedProfileKey = "";
+        _actionSource = SceneActionSource.None;
+        _lovemakingDatas = new List<LovemakingData>();
+        _invalidPlaybackIndexReported = false;
+        _engine.ResetDedup();
         ScenePathLabel.Text = path;
+        LoadPreview(path);
 
-        var girls = new List<string>();
-        var boys = new List<string>();
-
-        string baseScript = AxisInfo.Sr6ScriptPath(path, Axis.L0);
-        if (File.Exists(baseScript))
+        string warning = "";
+        string refPath = AxisInfo.Sr6RefPath(path);
+        bool refValid = SceneFiles.TryLoadSr6Ref(refPath, out var localKey, out var refExists, out var refError);
+        bool hasLegacySceneData = SceneFiles.HasLegacySceneData(path);
+        string selectedProfile = "";
+        if (refValid)
         {
-            // load saved per-axis scripts
-            for (int a = 0; a < 6; a++)
+            selectedProfile = localKey;
+            _profileKey = localKey;
+        }
+        else if (refExists)
+        {
+            warning = L("St.ProfileBroken", refError);
+        }
+        else if (!hasLegacySceneData && !string.IsNullOrEmpty(cardProfileKey))
+        {
+            if (!AxisInfo.IsValidProfileKey(cardProfileKey))
+                warning = L("St.ProfileKeyInvalid", cardProfileKey);
+            else
             {
-                var sp = SceneFiles.LoadSr6Script(AxisInfo.Sr6ScriptPath(path, (Axis)a));
-                _editors[a].Values = sp?.Values ?? new List<int>();
-                // range comes from config.ini [Output Range], not the scene script
+                selectedProfile = cardProfileKey;
+                _profileKey = cardProfileKey;
+                try { SceneFiles.SaveSr6Ref(refPath, cardProfileKey); }
+                catch (Exception ex) { warning = L("St.ProfileBroken", ex.Message); }
             }
-            _sceneParts = SceneFiles.LoadSr6Cfg(AxisInfo.Sr6CfgPath(path));
-            // keep the raw streams around so "generates" can re-derive axes
-            _lovemakingDatas = File.Exists(path)
-                ? SceneTxtParser.Parse(File.ReadAllText(path)).Data
-                : new List<LovemakingData>();
+        }
+        _bindingNeedsSceneSave = refValid && !string.Equals(localKey, cardProfileKey, StringComparison.Ordinal);
+
+        SceneActionSet? actionSet = null;
+        if (!string.IsNullOrEmpty(selectedProfile))
+        {
+            try
+            {
+                string profileStem = AxisInfo.ProfileStem(GameRootFor(path), selectedProfile);
+                if (SceneFiles.TryLoadActionSet(profileStem, out var shared, out var profileError))
+                {
+                    actionSet = shared;
+                    _actionSource = SceneActionSource.SharedProfile;
+                }
+                else
+                {
+                    warning = L("St.ProfileBroken", profileError);
+                }
+            }
+            catch (Exception ex) { warning = L("St.ProfileBroken", ex.Message); }
+        }
+
+        SceneActionSet local = null!;
+        string localError = "";
+        bool localComplete = SceneFiles.TryLoadActionSet(path, out local, out localError);
+        if (actionSet == null && localComplete)
+        {
+            actionSet = local;
+            _actionSource = SceneActionSource.SceneLocal;
+        }
+        else if (actionSet == null && SceneFiles.HasAnyActionSetFiles(path) && string.IsNullOrEmpty(warning))
+        {
+            warning = L("St.LegacyBroken", localError);
+        }
+
+        if (actionSet != null)
+        {
+            ApplyActionSet(actionSet);
+            bool rawLoaded = TryLoadRawData(path);
+            if (!rawLoaded && _actionSource == SceneActionSource.SharedProfile && !string.IsNullOrEmpty(selectedProfile))
+                rawLoaded = TryLoadRawData(AxisInfo.ProfileRawPath(GameRootFor(path), selectedProfile));
+            if (rawLoaded) ResolvePartsAgainstRaw();
+            if (!rawLoaded && string.IsNullOrEmpty(warning))
+                warning = L("St.RawUnavailable");
         }
         else if (File.Exists(path))
         {
-            // fresh scene: parse txt, derive axes, save
-            var scene = SceneTxtParser.Parse(File.ReadAllText(path));
-            if (!scene.IsNewVersion || scene.Data.Count == 0)
+            if (!TryLoadRawData(path))
             {
+                ClearActions();
                 Status(L("St.OldOrEmptyScene"));
+                RefreshSceneUi();
                 return;
             }
-            _lovemakingDatas = scene.Data;
-            var axes = SceneTxtParser.ComputeInitialAxes(scene.Data[0]);
-            for (int a = 0; a < 6; a++) { _editors[a].Values = axes[a].Values; } // range stays as loaded from config.ini
-            foreach (var d in scene.Data)
-            {
-                var parts = d.CharasName.Split('-');
-                if (parts.Length == 2) { girls.Add(parts[0]); boys.Add(parts[1]); }
-            }
+
+            var axes = SceneTxtParser.ComputeInitialAxes(_lovemakingDatas[0]);
+            for (int a = 0; a < 6; a++) _editors[a].Values = axes[a].Values;
             _sceneParts = new List<ScenePart>
             {
-                new() { Part = 0, LovemakingMode = "normal",
-                        Charas = (girls.FirstOrDefault() ?? "") + "-" + (boys.FirstOrDefault() ?? "") }
+                new() { Part = 0, LovemakingMode = "normal", Charas = _lovemakingDatas[0].CharasName }
             };
+            _actionSource = SceneActionSource.SceneLocal;
+            ResolvePartsAgainstRaw();
             SaveScripter(path);
         }
         else
         {
-            Status(L("St.SceneNotFound", path));
-            return;
+            ClearActions();
+            warning = string.IsNullOrEmpty(warning) ? L("St.NoSafeActionSource") : warning;
         }
 
-        // combos + parts from scene parts
-        foreach (var sp in _sceneParts)
+        RefreshSceneUi();
+        Status(string.IsNullOrEmpty(warning) ? L("St.Loaded", Path.GetFileName(path)) : warning);
+    }
+
+    private string ResolveScenePath(string rawPath)
+    {
+        const string search = "/UserData/KK_osr_sr6_link/";
+        int idx = rawPath.IndexOf(search, StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0 && !string.IsNullOrEmpty(GameRootBox.Text))
         {
-            var pr = sp.Charas.Split('-');
-            if (pr.Length == 2) { girls.Add(pr[0]); boys.Add(pr[1]); }
+            string relative = rawPath[(idx + 1)..].Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+            return Path.Combine(GameRootBox.Text, relative);
         }
+        if (File.Exists(rawPath) || Path.IsPathRooted(rawPath)) return rawPath;
+        Status(idx < 0 ? L("St.ScenePathNotUnder", rawPath) : L("St.SceneNotFound", rawPath));
+        return "";
+    }
+
+    private string GameRootFor(string path)
+    {
+        if (!string.IsNullOrWhiteSpace(GameRootBox.Text)) return GameRootBox.Text;
+        string normalized = path.Replace('\\', '/');
+        int idx = normalized.IndexOf("/UserData/", StringComparison.OrdinalIgnoreCase);
+        return idx > 0 ? normalized[..idx] : "";
+    }
+
+    private bool TryLoadRawData(string path)
+    {
+        if (!File.Exists(path)) return false;
+        try
+        {
+            var parsed = SceneTxtParser.Parse(File.ReadAllText(path));
+            if (!parsed.IsNewVersion || parsed.Data.Count == 0) return false;
+            _lovemakingDatas = parsed.Data;
+            _rawDataPath = path;
+            return true;
+        }
+        catch { return false; }
+    }
+
+    private void SaveProfileAssets(string profileKey)
+    {
+        string path = ResolvedPath();
+        string root = GameRootFor(path);
+        SceneFiles.CopyFileIfExists(_rawDataPath, AxisInfo.ProfileRawPath(root, profileKey));
+        string? previewPath = CardPreviewPath(path);
+        if (previewPath != null)
+            SceneFiles.CopyFileIfExists(previewPath, AxisInfo.ProfilePreviewPath(root, profileKey));
+    }
+
+    private static string? CardPreviewPath(string path)
+    {
+        string normalized = path.Replace('\\', '/');
+        int idx = normalized.IndexOf("/UserData/KK_osr_sr6_link/", StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return null;
+        string previewPath = normalized[..idx] + "/UserData/studio/scene/" + normalized[(idx + "/UserData/KK_osr_sr6_link/".Length)..];
+        return previewPath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase)
+            ? previewPath[..^4] + ".png"
+            : previewPath;
+    }
+
+    private static BitmapImage? LoadBitmap(string path)
+    {
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+            bmp.UriSource = new Uri(path);
+            bmp.EndInit();
+            return bmp;
+        }
+        catch { return null; }
+    }
+
+    private void LoadPreview(string path)
+    {
+        ScenePreview.Source = null;
+        string? previewPath = CardPreviewPath(path);
+        if (previewPath != null) ScenePreview.Source = LoadBitmap(previewPath);
+    }
+
+    private void UpdateProfilePreview()
+    {
+        if (ProfilePreview == null) return;
+        ProfilePreview.Source = null;
+        string key = _selectedProfileKey;
+        if (string.IsNullOrEmpty(key)) return;
+        string path = _filePath == "" ? "" : ResolvedPath();
+        string root = string.IsNullOrEmpty(path) ? GameRootBox.Text : GameRootFor(path);
+        if (string.IsNullOrEmpty(root)) return;
+        ProfilePreview.Source = LoadBitmap(AxisInfo.ProfilePreviewPath(root, key));
+    }
+
+    private void ApplyActionSet(SceneActionSet actionSet)
+    {
+        for (int a = 0; a < 6; a++) _editors[a].Values = actionSet.Axes[a].Values;
+        _sceneParts = actionSet.Parts;
+    }
+
+    private void ResolvePartsAgainstRaw()
+    {
+        foreach (var part in _sceneParts)
+        {
+            var data = FindLovemakingData(part.Charas);
+            if (data == null) { part.RawResolved = false; continue; }
+            part.Charas = data.CharasName;
+            part.RawResolved = true;
+        }
+    }
+
+    private void ClearActions()
+    {
+        for (int a = 0; a < 6; a++) _editors[a].Values = new List<int>();
+        _sceneParts = new List<ScenePart>();
+        _actionSource = SceneActionSource.None;
+    }
+
+    private void RefreshSceneUi()
+    {
+        var girls = new List<string>();
+        var boys = new List<string>();
+        foreach (var data in _lovemakingDatas)
+            if (CharacterPair.TrySplitLabels(data.CharasName, out var female, out var male))
+            { girls.Add(female); boys.Add(male); }
+        foreach (var part in _sceneParts)
+            if (CharacterPair.TrySplitLabels(part.Charas, out var female, out var male))
+            { girls.Add(female); boys.Add(male); }
         FillCombo(GirlList, girls);
         FillCombo(BoyList, boys);
 
-        // overview tracks L0; split lines from parts (skip first)
         _overview.Values = _editors[0].Values;
         _overview.SplitLines = _sceneParts.Skip(1).Select(p => p.Part).ToList();
-        for (int a = 0; a < 6; a++) _editors[a].SplitLines = _overview.SplitLines; // shared ref: in-place add/del reflect on every tab
+        for (int a = 0; a < 6; a++) _editors[a].SplitLines = _overview.SplitLines;
         RebuildPartList();
         if (PartList.Items.Count > 0) PartList.SelectedIndex = 0;
 
         for (int a = 0; a < 6; a++) _editors[a].Refresh();
         _overview.Refresh();
-        FitCurrentSurface(); // default zoom = fill the visible width (N1)
-        Status(L("St.Loaded", Path.GetFileName(path)));
+        FitCurrentSurface();
+        UpdateRawControls();
+        RefreshProfileList();
+        UpdateProfileUi();
     }
 
     private void SaveScripter(string path)
     {
+        var axes = new AxisScript[6];
         for (int a = 0; a < 6; a++)
-            SceneFiles.SaveSr6Script(AxisInfo.Sr6ScriptPath(path, (Axis)a),
-                new AxisScript { Values = _editors[a].Values, MaxValue = _sliders[a].MaxValue, MinValue = _sliders[a].MinValue });
-        SceneFiles.SaveSr6Cfg(AxisInfo.Sr6CfgPath(path), _sceneParts);
+            axes[a] = new AxisScript { Values = _editors[a].Values, MaxValue = _sliders[a].MaxValue, MinValue = _sliders[a].MinValue };
+        SceneFiles.SaveActionSet(path, axes, _sceneParts);
     }
 
-    private string ResolvedPath()
+    private string ResolvedPath() => ResolveScenePath(_filePath);
+
+    private void SaveActiveActionSet()
     {
-        string path = _filePath;
-        const string search = "/UserData/KK_osr_sr6_link/";
-        int idx = path.IndexOf(search, StringComparison.Ordinal);
-        if (idx != -1 && !string.IsNullOrEmpty(GameRootBox.Text))
-            path = GameRootBox.Text + path.Substring(idx);
-        return path;
+        if (_actionSource == SceneActionSource.SharedProfile && !string.IsNullOrEmpty(_profileKey))
+        {
+            SaveScripter(AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), _profileKey));
+            SaveProfileAssets(_profileKey);
+        }
+        else
+            SaveScripter(ResolvedPath());
     }
 
     private void Save_Click(object s, RoutedEventArgs e)
     {
         if (_filePath == "") { Status(L("St.NoScene")); return; }
-        try { SaveScripter(ResolvedPath()); Status(L("St.SavedScripts")); }
+        try { SaveActiveActionSet(); Status(L("St.SavedScripts")); }
         catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
     }
 
@@ -647,7 +834,7 @@ public partial class MainWindow : Window
         try
         {
             string path = ResolvedPath();
-            SaveScripter(path);
+            SaveActiveActionSet();
             int refCount = _editors[0].Values.Count;
             for (int a = 0; a < 6; a++)
                 SceneFiles.ExportFunscript(AxisInfo.FunscriptPath(path, (Axis)a), _editors[a].Values, refCount);
@@ -666,6 +853,182 @@ public partial class MainWindow : Window
                 System.Diagnostics.Process.Start("explorer.exe", dir);
         }
         catch (Exception ex) { Status(L("St.OpenFolderFailed", ex.Message)); }
+    }
+
+    private void UpdateRawControls()
+    {
+        bool enabled = _lovemakingDatas.Count > 0 && _editors[0].Values.Count > 0;
+        GenerateBtn.IsEnabled = enabled;
+        CreatePartBtn.IsEnabled = enabled;
+    }
+
+    private void RefreshProfileList()
+    {
+        if (ProfilePickerButton == null) return;
+        try
+        {
+            string root = _filePath == "" ? GameRootBox.Text : GameRootFor(ResolvedPath());
+            _profiles = string.IsNullOrEmpty(root) ? new List<string>() : SceneFiles.ListCompleteProfiles(root);
+            if (_actionSource == SceneActionSource.SharedProfile && _profiles.Contains(_profileKey))
+                _selectedProfileKey = _profileKey;
+            else if (!_profiles.Contains(_selectedProfileKey))
+                _selectedProfileKey = "";
+        }
+        catch (Exception ex)
+        {
+            _profiles = new List<string>();
+            _selectedProfileKey = "";
+            Status(L("St.ProfileListFailed", ex.Message));
+        }
+    }
+
+    private void UpdateProfileUi()
+    {
+        if (ProfileSourceLabel == null) return;
+        ProfileSourceLabel.Text = _actionSource == SceneActionSource.SharedProfile && !string.IsNullOrEmpty(_profileKey)
+            ? L("St.SharedProfileSource", _profileKey)
+            : _actionSource == SceneActionSource.SceneLocal
+                ? L("St.SceneLocalSource")
+                : L("St.NoSafeActionSource");
+        SaveSharedProfileBtn.Content = string.IsNullOrEmpty(_profileKey)
+            ? L("L.SaveSharedProfile")
+            : L("L.SaveSharedProfile") + ": " + _profileKey;
+        SaveSharedProfileBtn.IsEnabled = _actionSource == SceneActionSource.SharedProfile && _editors[0].Values.Count > 0;
+        ProfileSelectionLabel.Text = string.IsNullOrEmpty(_selectedProfileKey) ? L("L.SelectSharedProfile") : _selectedProfileKey;
+        ProfilePickerButton.IsEnabled = _filePath != "" && _profiles.Count > 0;
+        LoadSharedProfileBtn.IsEnabled = _filePath != "" && !string.IsNullOrEmpty(_selectedProfileKey);
+        ProfileStatusLabel.Text = _bindingNeedsSceneSave ? L("St.ProfileNeedsSceneSave") : "";
+        UpdateProfilePreview();
+    }
+
+    private void ProfilePicker_Click(object s, RoutedEventArgs e)
+    {
+        if (_filePath == "" || _profiles.Count == 0) return;
+        string root = GameRootFor(ResolvedPath());
+        var dialog = new ProfileSelectorWindow(this, root, _profiles, _selectedProfileKey);
+        if (dialog.ShowDialog() == true && !string.IsNullOrEmpty(dialog.SelectedProfileKey))
+        {
+            _selectedProfileKey = dialog.SelectedProfileKey;
+            UpdateProfileUi();
+        }
+    }
+
+    private void LoadSharedProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(_selectedProfileKey))
+            BindProfile(_selectedProfileKey, "St.ProfileLoaded");
+    }
+
+    private bool BindProfile(string key, string statusKey)
+    {
+        if (_filePath == "") { Status(L("St.NoScene")); return false; }
+        if (!AxisInfo.IsValidProfileKey(key)) { Status(L("St.ProfileKeyInvalid", key)); return false; }
+
+        string path = ResolvedPath();
+        string root = GameRootFor(path);
+        try
+        {
+            string stem = AxisInfo.ProfileStem(root, key);
+            if (!SceneFiles.TryLoadActionSet(stem, out var actionSet, out var error))
+            { Status(L("St.ProfileBroken", error)); return false; }
+
+            string refPath = AxisInfo.Sr6RefPath(path);
+            SceneFiles.SaveSr6Ref(refPath, key);
+            ApplyActionSet(actionSet);
+            _profileKey = key;
+            _cardProfileKey = key;
+            _selectedProfileKey = key;
+            _actionSource = SceneActionSource.SharedProfile;
+            _engine.ResetDedup();
+
+            _lovemakingDatas = new List<LovemakingData>();
+            _rawDataPath = "";
+            bool rawLoaded = TryLoadRawData(path);
+            if (!rawLoaded) rawLoaded = TryLoadRawData(AxisInfo.ProfileRawPath(root, key));
+            if (rawLoaded) ResolvePartsAgainstRaw();
+
+            bool sent = _server.SendProfileBinding(key);
+            _bindingNeedsSceneSave = !sent;
+            RefreshSceneUi();
+            Status(sent ? L(statusKey, key) + " - " + L("St.ProfileSaveQueued") : L("St.ProfilePluginDisconnected"));
+            return true;
+        }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); return false; }
+    }
+
+    private bool TryReadNewProfileKey(out string key)
+    {
+        key = ProfileKeyBox.Text.Trim();
+        if (key.Length == 0) { Status(L("St.ProfileKeyRequired")); return false; }
+        if (!AxisInfo.TryValidateProfileKey(key, out var error))
+        { Status(L("St.ProfileKeyInvalid", error)); return false; }
+        string stem = AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), key);
+        if (SceneFiles.HasAnyActionSetFiles(stem))
+        { Status(L("St.ProfileAlreadyExists", key)); return false; }
+        return true;
+    }
+
+    private void CreateSharedProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (_filePath == "") { Status(L("St.NoScene")); return; }
+        if (_editors[0].Values.Count == 0) { Status(L("St.NoSafeActionSource")); return; }
+        if (!TryReadNewProfileKey(out var key)) return;
+        try
+        {
+            SceneFiles.SaveActionSet(AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), key), CurrentAxisScripts(), _sceneParts);
+            SaveProfileAssets(key);
+            BindProfile(key, "St.ProfileCreated");
+        }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
+    }
+
+    private void ForkProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (_filePath == "") { Status(L("St.NoScene")); return; }
+        if (_editors[0].Values.Count == 0) { Status(L("St.NoSafeActionSource")); return; }
+        if (!TryReadNewProfileKey(out var key)) return;
+        try
+        {
+            SceneFiles.SaveActionSet(AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), key), CurrentAxisScripts(), _sceneParts);
+            SaveProfileAssets(key);
+            BindProfile(key, "St.ProfileForked");
+        }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
+    }
+
+    private AxisScript[] CurrentAxisScripts()
+    {
+        var axes = new AxisScript[6];
+        for (int a = 0; a < 6; a++)
+            axes[a] = new AxisScript { Values = _editors[a].Values, MaxValue = _sliders[a].MaxValue, MinValue = _sliders[a].MinValue };
+        return axes;
+    }
+
+    private void SaveSharedProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (_actionSource != SceneActionSource.SharedProfile || string.IsNullOrEmpty(_profileKey))
+        { Status(L("St.NoSafeActionSource")); return; }
+        try
+        {
+            SceneFiles.SaveActionSet(AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), _profileKey), CurrentAxisScripts(), _sceneParts);
+            SaveProfileAssets(_profileKey);
+            RefreshProfileList();
+            Status(L("St.SharedProfileSaved", _profileKey));
+        }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
+    }
+
+    private void UnbindProfile_Click(object s, RoutedEventArgs e)
+    {
+        if (_filePath == "") { Status(L("St.NoScene")); return; }
+        string path = ResolvedPath();
+        try
+        {
+            File.Delete(AxisInfo.Sr6RefPath(path));
+            LoadScene(_filePath);
+            Status(L("St.ProfileUnbound"));
+        }
+        catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
     }
 
     private void ShowChars_Click(object s, RoutedEventArgs e) => _server.SendShow(GirlList.Text, BoyList.Text);
@@ -743,7 +1106,13 @@ public partial class MainWindow : Window
     private void BrowseGameRoot_Click(object s, RoutedEventArgs e)
     {
         var dlg = new Microsoft.Win32.OpenFolderDialog();
-        if (dlg.ShowDialog() == true) { GameRootBox.Text = dlg.FolderName; _cfg.GameRoot = dlg.FolderName; }
+        if (dlg.ShowDialog() == true)
+        {
+            GameRootBox.Text = dlg.FolderName;
+            _cfg.GameRoot = dlg.FolderName;
+            RefreshProfileList();
+            UpdateProfileUi();
+        }
     }
 
     private static void FillCombo(ComboBox combo, IEnumerable<string> items)

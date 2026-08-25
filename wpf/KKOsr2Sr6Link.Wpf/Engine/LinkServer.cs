@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 namespace KKOsr2Sr6Link.Wpf.Engine;
 
-/// <summary>A decoded "path|index|sleep" message from the plugin.</summary>
-public readonly record struct SceneMessage(string Path, int Index, double Sleep);
+/// <summary>A decoded "path|index|sleep[|profileKey]" message from the plugin.</summary>
+public readonly record struct SceneMessage(string Path, int Index, double Sleep, string ProfileKey = "");
 
 /// <summary>
 /// TCP server side of the plugin link (the plugin is the client). Listens on ip:port, decodes
@@ -94,7 +94,7 @@ public sealed class LinkServer : IDisposable
         }
     }
 
-    /// <summary>Decode "path|index|sleep" (first three '|' fields), like server_read's split.</summary>
+    /// <summary>Decode the legacy three fields and the optional fourth profile key.</summary>
     public static bool TryParse(string data, out SceneMessage msg)
     {
         msg = default;
@@ -103,7 +103,7 @@ public sealed class LinkServer : IDisposable
         if (parts.Length < 3) return false;
         int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var index);
         double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var sleep);
-        msg = new SceneMessage(parts[0], index, sleep);
+        msg = new SceneMessage(parts[0], index, sleep, parts.Length >= 4 ? parts[3] : "");
         return true;
     }
 
@@ -114,6 +114,14 @@ public sealed class LinkServer : IDisposable
     public bool SendSelectChara(string chara) => TrySend("2:" + chara);
     public bool SendShow(string girl, string boy) => TrySend("3:" + girl + "-" + boy);
     public bool SendHide(string girl, string boy) => TrySend("4:" + girl + "-" + boy);
+
+    /// <summary>Persist the scene binding without the timeline command throttle.</summary>
+    public bool SendProfileBinding(string? profileKey)
+    {
+        profileKey ??= "";
+        if (!string.IsNullOrEmpty(profileKey) && !AxisInfo.IsValidProfileKey(profileKey)) return false;
+        return TrySendImmediate("5:" + profileKey);
+    }
 
     private bool TrySend(string message)
     {
@@ -133,6 +141,24 @@ public sealed class LinkServer : IDisposable
             catch (ObjectDisposedException) { return false; }
             _nextAllowed = now + ThrottleMs;
             return true;
+        }
+    }
+
+    private bool TrySendImmediate(string message)
+    {
+        lock (_sendLock)
+        {
+            var stream = _stream;
+            if (stream == null || _client?.Connected != true) return false;
+            try
+            {
+                var bytes = Encoding.UTF8.GetBytes(message);
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush();
+                return true;
+            }
+            catch (IOException) { return false; }
+            catch (ObjectDisposedException) { return false; }
         }
     }
 

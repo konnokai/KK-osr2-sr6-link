@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace KKOsr2Sr6Link.Wpf.Engine;
 
@@ -8,6 +9,27 @@ public sealed class ScenePart
     public int Part { get; set; }
     public string LovemakingMode { get; set; } = "normal";
     public string Charas { get; set; } = "";
+    public bool RawResolved { get; set; } = true;
+}
+
+public enum SceneActionSource
+{
+    None,
+    SceneLocal,
+    SharedProfile,
+}
+
+/// <summary>One complete six-axis action set and its scene-part configuration.</summary>
+public sealed class SceneActionSet
+{
+    public AxisScript[] Axes { get; }
+    public List<ScenePart> Parts { get; }
+
+    public SceneActionSet(AxisScript[] axes, IEnumerable<ScenePart> parts)
+    {
+        Axes = axes;
+        Parts = parts.ToList();
+    }
 }
 
 /// <summary>

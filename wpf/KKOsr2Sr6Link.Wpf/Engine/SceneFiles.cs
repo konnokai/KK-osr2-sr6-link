@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -24,21 +26,30 @@ public static class SceneFiles
 
     public static AxisScript? LoadSr6Script(string path)
     {
-        if (!File.Exists(path)) return null;
-        var text = File.ReadAllText(path);
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        var root = JsonNode.Parse(text) as JsonObject;
-        if (root == null) return null;
+        return TryLoadSr6Script(path, out var script) ? script : null;
+    }
 
-        var script = new AxisScript
+    public static bool TryLoadSr6Script(string path, out AxisScript script)
+    {
+        script = new AxisScript();
+        if (!File.Exists(path)) return false;
+        try
         {
-            MaxValue = root.TryGetPropertyValue("maxvalue", out var mx) ? (mx?.GetValue<int>() ?? 999) : 999,
-            MinValue = root.TryGetPropertyValue("minvalue", out var mn) ? (mn?.GetValue<int>() ?? 0) : 0,
-        };
-        if (root.TryGetPropertyValue("actions", out var actions) && actions is JsonArray arr)
-            foreach (var v in arr)
-                script.Values.Add(v?.GetValue<int>() ?? 0);
-        return script;
+            var text = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (JsonNode.Parse(text) is not JsonObject root) return false;
+
+            script.MaxValue = root.TryGetPropertyValue("maxvalue", out var mx) ? (mx?.GetValue<int>() ?? 999) : 999;
+            script.MinValue = root.TryGetPropertyValue("minvalue", out var mn) ? (mn?.GetValue<int>() ?? 0) : 0;
+            if (root.TryGetPropertyValue("actions", out var actions) && actions is JsonArray arr)
+            {
+                foreach (var v in arr)
+                    if (v == null) return false;
+                    else script.Values.Add(v.GetValue<int>());
+            }
+            return true;
+        }
+        catch (Exception) { return false; }
     }
 
     public static void SaveSr6Script(string path, AxisScript script)
@@ -58,22 +69,31 @@ public static class SceneFiles
 
     public static List<ScenePart> LoadSr6Cfg(string path)
     {
-        var result = new List<ScenePart>();
-        if (!File.Exists(path)) return result;
-        var text = File.ReadAllText(path);
-        if (string.IsNullOrWhiteSpace(text)) return result;
-        if (JsonNode.Parse(text) is not JsonArray arr) return result;
-        foreach (var node in arr)
+        return TryLoadSr6Cfg(path, out var result) ? result : new List<ScenePart>();
+    }
+
+    public static bool TryLoadSr6Cfg(string path, out List<ScenePart> result)
+    {
+        result = new List<ScenePart>();
+        if (!File.Exists(path)) return false;
+        try
         {
-            if (node is not JsonObject obj) continue;
-            result.Add(new ScenePart
+            var text = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (JsonNode.Parse(text) is not JsonArray arr) return false;
+            foreach (var node in arr)
             {
-                Part = obj.TryGetPropertyValue("part", out var p) ? (p?.GetValue<int>() ?? 0) : 0,
-                LovemakingMode = ModeFromQt(obj.TryGetPropertyValue("lovemaking mode", out var m) ? (m?.GetValue<string>() ?? "") : ""),
-                Charas = obj.TryGetPropertyValue("charas", out var c) ? (c?.GetValue<string>() ?? "") : "",
-            });
+                if (node is not JsonObject obj) return false;
+                result.Add(new ScenePart
+                {
+                    Part = obj.TryGetPropertyValue("part", out var p) ? (p?.GetValue<int>() ?? 0) : 0,
+                    LovemakingMode = ModeFromQt(obj.TryGetPropertyValue("lovemaking mode", out var m) ? (m?.GetValue<string>() ?? "") : ""),
+                    Charas = obj.TryGetPropertyValue("charas", out var c) ? (c?.GetValue<string>() ?? "") : "",
+                });
+            }
+            return true;
         }
-        return result;
+        catch (Exception) { return false; }
     }
 
     // The Qt app stores handjob modes as "handjob(Detecting girl left/right hand)"; WPF uses the
@@ -107,6 +127,111 @@ public static class SceneFiles
             w.WriteEndObject();
         }
         w.WriteEndArray();
+    }
+
+    // ---- complete action sets and shared-profile references ----
+
+    public static bool TryLoadActionSet(string stem, out SceneActionSet actionSet, out string error)
+    {
+        actionSet = null!;
+        error = "";
+        var axes = new AxisScript[6];
+        for (int i = 0; i < 6; i++)
+        {
+            string path = AxisInfo.Sr6ScriptPath(stem, (Axis)i);
+            if (!File.Exists(path)) { error = $"Missing {Path.GetFileName(path)}."; return false; }
+            if (!TryLoadSr6Script(path, out axes[i])) { error = $"Malformed {Path.GetFileName(path)}."; return false; }
+            if (axes[i].Values.Count == 0) { error = $"Empty {Path.GetFileName(path)}."; return false; }
+        }
+
+        string cfgPath = AxisInfo.Sr6CfgPath(stem);
+        if (!File.Exists(cfgPath)) { error = $"Missing {Path.GetFileName(cfgPath)}."; return false; }
+        if (!TryLoadSr6Cfg(cfgPath, out var parts)) { error = $"Malformed {Path.GetFileName(cfgPath)}."; return false; }
+
+        int length = axes[0].Values.Count;
+        if (axes.Any(a => a.Values.Count != length)) { error = "Axis lengths do not match."; return false; }
+        actionSet = new SceneActionSet(axes, parts);
+        return true;
+    }
+
+    public static void SaveActionSet(string stem, IReadOnlyList<AxisScript> axes, IEnumerable<ScenePart> parts)
+    {
+        if (axes.Count != 6) throw new ArgumentException("A complete action set needs six axes.", nameof(axes));
+        string? dir = Path.GetDirectoryName(stem);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        for (int i = 0; i < 6; i++) SaveSr6Script(AxisInfo.Sr6ScriptPath(stem, (Axis)i), axes[i]);
+        SaveSr6Cfg(AxisInfo.Sr6CfgPath(stem), parts);
+    }
+
+    /// <summary>Copies an optional profile asset without deleting an existing asset when no source exists.</summary>
+    public static void CopyFileIfExists(string source, string destination)
+    {
+        if (!File.Exists(source)) return;
+        if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase)) return;
+        string? dir = Path.GetDirectoryName(destination);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.Copy(source, destination, true);
+    }
+
+    public static bool HasAnyActionSetFiles(string stem)
+        => AxisInfo.All.Select(a => AxisInfo.Sr6ScriptPath(stem, a)).Append(AxisInfo.Sr6CfgPath(stem)).Any(File.Exists);
+
+    public static bool HasLegacySceneData(string stem)
+        => File.Exists(stem) || HasAnyActionSetFiles(stem);
+
+    public static List<string> ListCompleteProfiles(string gameRoot)
+    {
+        string dir = AxisInfo.ProfilesDirectory(gameRoot);
+        if (!Directory.Exists(dir)) return new List<string>();
+        return Directory.EnumerateFiles(dir, "*.sr6cfg", SearchOption.TopDirectoryOnly)
+            .Select(Path.GetFileNameWithoutExtension)
+            .Where(k => AxisInfo.IsValidProfileKey(k))
+            .Where(k => SceneFiles.TryLoadActionSet(AxisInfo.ProfileStem(gameRoot, k!), out _, out _))
+            .OrderByDescending(k => ProfileLastWriteTimeUtc(gameRoot, k!))
+            .ThenBy(k => k, StringComparer.OrdinalIgnoreCase)
+            .Cast<string>()
+            .ToList();
+    }
+
+    /// <summary>Uses the newest related asset timestamp as the profile's last edit time.</summary>
+    private static DateTime ProfileLastWriteTimeUtc(string gameRoot, string profileKey)
+    {
+        string stem = AxisInfo.ProfileStem(gameRoot, profileKey);
+        return AxisInfo.All.Select(axis => AxisInfo.Sr6ScriptPath(stem, axis))
+            .Append(AxisInfo.Sr6CfgPath(stem))
+            .Append(AxisInfo.ProfileRawPath(gameRoot, profileKey))
+            .Append(AxisInfo.ProfilePreviewPath(gameRoot, profileKey))
+            .Where(File.Exists)
+            .Select(File.GetLastWriteTimeUtc)
+            .DefaultIfEmpty(DateTime.MinValue)
+            .Max();
+    }
+
+    public static bool TryLoadSr6Ref(string path, out string profileKey, out bool exists, out string error)
+    {
+        profileKey = "";
+        exists = File.Exists(path);
+        error = "";
+        if (!exists) return false;
+        try
+        {
+            var lines = File.ReadAllLines(path, Encoding.UTF8);
+            if (lines.Length == 0 || string.IsNullOrEmpty(lines[0]) || lines.Skip(1).Any(l => l.Length > 0))
+            { error = "Reference must contain one profile key."; return false; }
+            if (!AxisInfo.TryValidateProfileKey(lines[0], out error)) return false;
+            profileKey = lines[0];
+            return true;
+        }
+        catch (Exception ex) { error = ex.Message; return false; }
+    }
+
+    public static void SaveSr6Ref(string path, string profileKey)
+    {
+        if (!AxisInfo.TryValidateProfileKey(profileKey, out var error))
+            throw new ArgumentException(error, nameof(profileKey));
+        string? dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.WriteAllText(path, profileKey + Environment.NewLine, new UTF8Encoding(false));
     }
 
     // ---- .funscript export ----

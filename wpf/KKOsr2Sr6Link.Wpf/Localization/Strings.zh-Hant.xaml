@@ -41,6 +41,18 @@
     <s:String x:Key="L.OutputRange">輸出範圍</s:String>
     <s:String x:Key="L.ConvertFunscript">將 sr6script 檔案轉換為 funscript 檔案</s:String>
     <s:String x:Key="L.SaveScripter">儲存腳本</s:String>
+    <s:String x:Key="L.ProfileSelector">共用 profile</s:String>
+    <s:String x:Key="L.CreateSharedProfile">建立共用</s:String>
+    <s:String x:Key="L.ForkProfile">分叉 profile</s:String>
+    <s:String x:Key="L.SaveSharedProfile">儲存共用 profile</s:String>
+    <s:String x:Key="L.LoadSharedProfile">載入 profile</s:String>
+    <s:String x:Key="L.SelectSharedProfile">選擇 profile</s:String>
+    <s:String x:Key="L.ProfileGalleryTitle">共用 profile 圖庫</s:String>
+    <s:String x:Key="L.NoProfilePreview">沒有預覽圖</s:String>
+    <s:String x:Key="L.PreviousPage">上一頁</s:String>
+    <s:String x:Key="L.NextPage">下一頁</s:String>
+    <s:String x:Key="L.ProfilePage">第 {0} / {1} 頁</s:String>
+    <s:String x:Key="L.UnbindProfile">解除 profile 綁定</s:String>
     <s:String x:Key="L.OpenFolders">開啟腳本資料夾</s:String>
 
     <!-- settings page -->
@@ -79,6 +91,26 @@
     <s:String x:Key="St.Loaded">已載入 {0}</s:String>
     <s:String x:Key="St.NoScene">尚未載入場景</s:String>
     <s:String x:Key="St.SavedScripts">已儲存腳本</s:String>
+    <s:String x:Key="St.SharedProfileSource">來源：共用：{0}</s:String>
+    <s:String x:Key="St.SceneLocalSource">來源：場景本地</s:String>
+    <s:String x:Key="St.ProfileKeyRequired">請輸入 profile key</s:String>
+    <s:String x:Key="St.ProfileKeyInvalid">profile key 無效：{0}</s:String>
+    <s:String x:Key="St.ProfileAlreadyExists">profile 已存在：{0}</s:String>
+    <s:String x:Key="St.ProfileCreated">已建立並綁定共用 profile：{0}</s:String>
+    <s:String x:Key="St.ProfileForked">已分叉並綁定共用 profile：{0}</s:String>
+    <s:String x:Key="St.SharedProfileSaved">已儲存共用 profile：{0}</s:String>
+    <s:String x:Key="St.ProfileBound">已綁定共用 profile：{0}</s:String>
+    <s:String x:Key="St.ProfileLoaded">已載入共用 profile：{0}</s:String>
+    <s:String x:Key="St.ProfileNeedsSceneSave">請再儲存一次 Studio 場景，將此綁定寫入卡片</s:String>
+    <s:String x:Key="St.ProfileSaveQueued">已送出 profile 綁定；目前 Studio 卡片已排入儲存</s:String>
+    <s:String x:Key="St.ProfilePluginDisconnected">綁定已保留在本地；plugin 未連線，因此尚未更新場景卡片</s:String>
+    <s:String x:Key="St.ProfileBroken">共用 profile 損壞：{0}</s:String>
+    <s:String x:Key="St.LegacyBroken">場景本地 action set 不完整：{0}</s:String>
+    <s:String x:Key="St.NoSafeActionSource">沒有完整的 action 來源；已停用硬體輸出</s:String>
+    <s:String x:Key="St.RawUnavailable">找不到場景原始資料；已停用重建功能</s:String>
+    <s:String x:Key="St.ProfileListFailed">profile 清單失敗：{0}</s:String>
+    <s:String x:Key="St.ProfileUnbound">已解除 profile 綁定</s:String>
+    <s:String x:Key="St.PlaybackIndexOutOfRange">播放索引 {0} 超出目前 action 範圍</s:String>
     <s:String x:Key="St.SaveFailed">儲存失敗：{0}</s:String>
     <s:String x:Key="St.ExportedFunscripts">已匯出 6 個 funscript</s:String>
     <s:String x:Key="St.ExportFailed">匯出失敗：{0}</s:String>

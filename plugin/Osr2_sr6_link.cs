@@ -20,23 +20,20 @@ using UnityEngine;
 using UnityEngine.UI;
 using static KK_osr2_sr6_link.Osr2_sr6_link;
 
-
-
-
 namespace KK_osr2_sr6_link
 {
-
-
     [BepInPlugin("org.bepinex.plugins.osr2_sr6_link", "Osr2_sr6_link", "4.0.0")]
+    [BepInDependency("marco.kkapi")]
+    [BepInDependency("com.bepis.bepinex.extendedsave")]
     [BepInProcess("CharaStudio")]
     public class Osr2_sr6_link : BaseUnityPlugin
     {
         public static int scanning_mode = 0;
 
         // chara
-        Dictionary<GameObject, String> charas = new Dictionary<GameObject,String>();     
-        Dictionary<GameObject, String> female_charas =  new  Dictionary <GameObject, String>();
-        Dictionary<GameObject, String> male_charas = new Dictionary <GameObject, String> ();
+        Dictionary<GameObject, String> charas = new Dictionary<GameObject, String>();
+        Dictionary<GameObject, String> female_charas = new Dictionary<GameObject, String>();
+        Dictionary<GameObject, String> male_charas = new Dictionary<GameObject, String>();
         public ConfigEntry<int> charas_num;
         // 掃描開始時抓一次骨頭 Transform,取樣時不再每格 GameObject.Find
         private Dictionary<string, BoneSet> bone_cache = new Dictionary<string, BoneSet>();
@@ -69,21 +66,86 @@ namespace KK_osr2_sr6_link
         public GameObject malethightR;
         public GameObject malehips;
 
-
         public float last_pitch = 2;
         public float last_roll = 2;
         public float last_twist = 2;
-
-
 
         public static bool cycle = false;
         public static string scene_path = "no";
         private static bool resampled = true;
         public bool start_sampled = false;
         public static string currentDirectory = Directory.GetCurrentDirectory().Replace("\\", "/");
+        private static readonly object profile_key_lock = new object();
+        private static string current_profile_key = "";
+        private static ManualLogSource plugin_logger;
+        private static int profile_save_requested;
+        private static bool profile_save_wait_logged;
+
+        public static string CurrentProfileKey
+        {
+            get { lock (profile_key_lock) return current_profile_key; }
+        }
+
+        internal static void LogInfo(string message)
+        {
+            plugin_logger?.LogInfo(message);
+        }
+
+        /// <summary>Writes a message-level log so BepInEx Message Center displays it in-game.</summary>
+        internal static void ShowMessage(string message)
+        {
+            plugin_logger?.LogMessage(message);
+        }
+
+        private static void RequestProfileSave()
+        {
+            Interlocked.Exchange(ref profile_save_requested, 1);
+            profile_save_wait_logged = false;
+        }
+
+        /// <summary>Writes the current profile metadata to the loaded card on Unity's main thread.</summary>
+        private void ProcessPendingProfileSave()
+        {
+            if (Interlocked.CompareExchange(ref profile_save_requested, 0, 0) == 0) return;
+            if (scene_path == "no")
+            {
+                if (!profile_save_wait_logged)
+                {
+                    profile_save_wait_logged = true;
+                    LogInfo("profile card save pending: no scene is loaded");
+                }
+                return;
+            }
+
+            try
+            {
+                var studio = Singleton<Studio.Studio>.Instance;
+                if (studio == null)
+                {
+                    if (!profile_save_wait_logged)
+                    {
+                        profile_save_wait_logged = true;
+                        LogInfo("profile card save pending: Studio instance is unavailable");
+                    }
+                    return;
+                }
+
+                string targetPath = scene_path;
+                LogInfo("profile card save requested: redirecting full Studio.SaveScene to path=" + targetPath);
+                bool saved = SceneProfileController.TrySaveCurrentCard(targetPath);
+                Interlocked.Exchange(ref profile_save_requested, 0);
+                LogInfo("profile card save completed: " + saved + " path=" + targetPath);
+                ShowMessage(saved ? "Profile binding saved." : "Profile binding save failed. See log for details.");
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Exchange(ref profile_save_requested, 0);
+                LogInfo("profile card save failed: " + ex);
+                ShowMessage("Profile binding save failed. See log for details.");
+            }
+        }
 
         private List<double> play_times = new List<double>();
-
 
         public struct Action_data
         {
@@ -124,29 +186,19 @@ namespace KK_osr2_sr6_link
 
             public List<float> bodywidths;
             public string charas_name;
-
-
-
         }
         private List<Action_data> action_list = new List<Action_data>();
 
         private double last_playtime = 0;
         private double last_interval_time = 0;
 
-
         private int roundedPlaybackTime = 1;
         private int roundedIntervalTime = 1;
         private int last_roundedPlaybackTime = 1;
 
-
-
-
         //window
         public double interval_time = 0.1;
         public ConfigEntry<bool> autorelink;
-
-
-
 
         //tcpclientSocket 
         private static Socket clientSocket;
@@ -163,7 +215,6 @@ namespace KK_osr2_sr6_link
         public ConfigEntry<int> server_port;
         private int port;
 
-       
         private void Link_server()
         {
             if (!link)
@@ -193,20 +244,24 @@ namespace KK_osr2_sr6_link
             }
         }
 
-
-
         //计算具体部位
         void Start()
         {
-            Harmony.CreateAndPatchAll(typeof(Osr2_sr6_link));
+            plugin_logger = Logger;
+            Logger.LogInfo("KKS osr2 sr6 link: applying Harmony patches");
+            var harmony = new Harmony("org.bepinex.plugins.osr2_sr6_link");
+            harmony.PatchAll(typeof(Osr2_sr6_link));
+            harmony.PatchAll(typeof(SceneProfileController));
+            Logger.LogInfo("KKS osr2 sr6 link: Harmony patches applied");
             Logger.LogInfo("KKS osr2 sr6 link start");
             server_ip = Config.Bind("link setting", "Server IP", "127.0.0.1", "input app server ip");
             server_port = Config.Bind("link setting", "Server port", 8000, "input app server port id");
             link_interval = Config.Bind("link setting", "relink interval", 5000, "setting relink time(Millisecond)");
-            autorelink = Config.Bind("link setting", "autorelink", true, "setting relink time(Millisecond)");           
+            autorelink = Config.Bind("link setting", "autorelink", true, "setting relink time(Millisecond)");
             Config.Bind("link setting", "Link State", "", new ConfigDescription("Click to connect app", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer1 }));
             charas_num = Config.Bind("sampled setting", "charas_num", 10, "Scanning of number of charas of the same sex");
             Config.Bind("sampled setting", "Sample", "", new ConfigDescription("Click to sample sex data", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer2 }));
+            SceneProfileController.Register();
             clientlistener = new Thread(ReceiveClient);
             clientlistener.IsBackground = true;
             clientlistener.Start();
@@ -249,7 +304,6 @@ namespace KK_osr2_sr6_link
             GUILayout.EndHorizontal();
         }
 
-
         public void MyDrawer2(BepInEx.Configuration.ConfigEntryBase entry)
         {
             GUILayout.BeginHorizontal();
@@ -277,14 +331,15 @@ namespace KK_osr2_sr6_link
                     scanning_mode = 0;
                     cycle = false;
                 }
-                else if (GUILayout.Button("start bisexual sampled ")) {
+                else if (GUILayout.Button("start bisexual sampled "))
+                {
                     start_sampled = true;
                     scanning_mode = 0;
                     cycle = false;
                 }
 
             }
-            
+
             if (start_sampled)
             {
                 GUILayout.Label($"掃描中 {Timeline.Timeline.playbackTime:F1}/{Timeline.Timeline.duration:F1} — 請勿手動拖動時間軸");
@@ -312,34 +367,87 @@ namespace KK_osr2_sr6_link
             return minutes * 60 + seconds + milliseconds / 100.0f;
         }
 
+        public static bool TrySetCurrentProfileKey(string profileKey)
+        {
+            if (!string.IsNullOrEmpty(profileKey) && !IsValidProfileKey(profileKey)) return false;
+            lock (profile_key_lock) current_profile_key = profileKey ?? "";
+            return true;
+        }
+
+        public static bool IsValidProfileKey(string profileKey)
+        {
+            if (string.IsNullOrEmpty(profileKey) || profileKey == "." || profileKey == "..") return false;
+            if (profileKey.IndexOfAny(new[] { '/', '\\', '|', ':' }) >= 0) return false;
+            return profileKey.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+        }
+
+        public static string SceneDataPath(string studioScenePath)
+        {
+            const string marker = "UserData/studio/scene/";
+            string normalized = studioScenePath.Replace("\\", "/")
+                .Replace("/UserData//studio/", "/UserData/studio/");
+            int index = normalized.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index < 0) return "";
+            string relative = normalized.Substring(index + marker.Length);
+            if (relative.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                relative = relative.Substring(0, relative.Length - 4);
+            string root = index == 0 ? currentDirectory : normalized.Substring(0, index).TrimEnd('/');
+            if (string.IsNullOrEmpty(root)) root = currentDirectory;
+            return root + "/UserData/KK_osr_sr6_link/" + relative + ".txt";
+        }
+
+        public static string ProfileStem(string profileKey)
+            => currentDirectory + "/UserData/KK_osr_sr6_link/_profiles/" + profileKey;
+
+        public static string SceneRefPath(string rawPath)
+        {
+            if (rawPath.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                rawPath = rawPath.Substring(0, rawPath.Length - 4);
+            return rawPath + ".sr6ref";
+        }
+
+        public static string BuildSceneMessage(string path, int index, double interval)
+        {
+            string message = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0}|{1}|{2}", path, index, interval);
+            string profileKey = CurrentProfileKey;
+            return string.IsNullOrEmpty(profileKey) ? message : message + "|" + profileKey;
+        }
+
+        private static void SendSceneMessage(string message)
+        {
+            if (!link || clientSocket == null) return;
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            try { clientSocket.Send(data); }
+            catch
+            {
+                Debug.Log("Osr2 sr6 Server close.");
+                try { clientSocket.Close(); } catch { }
+                link = false;
+            }
+        }
 
         [HarmonyPostfix]
         [HarmonyPatch(typeof(SceneLoadScene), "LoadScene")]
         public static void Getscene_path(SceneLoadScene __instance, string _path)
         {
+            plugin_logger?.LogInfo("New scene Start!");
+            plugin_logger?.LogInfo("path:" + _path);
             Debug.Log("New scene Start!\n");
             Debug.Log($"path:{_path}");
             cycle = false;
             scene_path = _path;
             resampled = true;
-            string target_path = scene_path.Replace("/UserData/studio/scene/", "").Replace(".png", "").Replace(currentDirectory, "").Replace("/CharaStudio_Data/..", "");
-            string filePath = (currentDirectory + "/UserData/KK_osr_sr6_link/" + target_path + ".txt").Replace("/UserData//studio/scene/", "");
-
-            if (File.Exists(filePath) && Timeline.Timeline.isPlaying)
+            string filePath = SceneDataPath(scene_path);
+            bool rawExists = File.Exists(filePath);
+            string profileKey = CurrentProfileKey;
+            plugin_logger?.LogInfo("scene data path:" + filePath + ", raw=" + rawExists + ", profile=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey) + ", link=" + link);
+            if ((rawExists || !string.IsNullOrEmpty(profileKey)) && link)
             {
-                string message = $"{filePath}|{0}|{0.1}";
-                byte[] data = Encoding.UTF8.GetBytes(message);
-                try
-                {
-                    clientSocket.Send(data);
-                }
-                catch
-                {
-                    Debug.Log("Osr2 sr6 Server close.");
-                    clientSocket.Close();
-                    link = false;
-                }
+                SendSceneMessage(BuildSceneMessage(filePath, 0, 0.1));
+                plugin_logger?.LogInfo("scene message sent");
             }
+            else
+                plugin_logger?.LogInfo("scene message skipped: no raw data/profile or TCP link");
         }
 
         public string FindRootObjectPath(string rootName, string targetName)
@@ -407,8 +515,6 @@ namespace KK_osr2_sr6_link
                 malehead = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_head")),
             };
         }
-
-
 
         public float[] Dis_angle_blowjob(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, Vector3 p5, Vector3 p6, Vector3 p7) //penis mouth earL earR head maleL maleR.
         {
@@ -583,9 +689,6 @@ namespace KK_osr2_sr6_link
             return angle;
         }
 
-
-
-
         private void Setting_range()
         {
             if (interval_time > 1 || interval_time < 0.1) { interval_time = 0.1; }
@@ -593,11 +696,11 @@ namespace KK_osr2_sr6_link
             if (server_port.Value < 0 || server_port.Value > 9999) { server_port.Value = 8000; }
         }
 
-
-
-
-        public void Update() {
-            if (scene_path != "no") {
+        public void Update()
+        {
+            ProcessPendingProfileSave();
+            if (scene_path != "no")
+            {
                 Setting_range();
                 if (start_sampled)
                 {
@@ -607,9 +710,8 @@ namespace KK_osr2_sr6_link
                 {
                     if (link)
                     {
-                        string target_path = scene_path.Replace("/UserData/studio/scene/", "").Replace(".png", "").Replace(currentDirectory, "").Replace("/CharaStudio_Data/..", "");
-                        string filePath = (currentDirectory + "/UserData/KK_osr_sr6_link/" + target_path + ".txt").Replace("/UserData//studio/scene/", "");
-                        if (File.Exists(filePath) && Timeline.Timeline.isPlaying)
+                        string filePath = SceneDataPath(scene_path);
+                        if ((File.Exists(filePath) || !string.IsNullOrEmpty(CurrentProfileKey)) && Timeline.Timeline.isPlaying)
                         {
                             int index = 0;
                             roundedPlaybackTime = (int)(Math.Round(Timeline.Timeline.playbackTime, 1) * 10);
@@ -625,18 +727,7 @@ namespace KK_osr2_sr6_link
                                 }
                             }
                             //Logger.LogInfo("index:" + index);
-                            string message = $"{filePath}|{index}|{interval_time}";
-                            byte[] data = Encoding.UTF8.GetBytes(message);
-                            try
-                            {
-                                clientSocket.Send(data);
-                            }
-                            catch
-                            {
-                                Logger.LogInfo("Server close.");
-                                clientSocket.Close();
-                                link = false;
-                            }
+                            SendSceneMessage(BuildSceneMessage(filePath, index, interval_time));
                         }
                     }
                 }
@@ -659,7 +750,7 @@ namespace KK_osr2_sr6_link
                 male_charas.Clear();
                 charas.Clear();
                 Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager) .Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
+                Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
                 for (int i = 0; i < charas_num.Value; i++)
                 {
                     string female_chara = "chaF_00" + i.ToString();
@@ -672,7 +763,7 @@ namespace KK_osr2_sr6_link
                         GuideSelect female_guideSelect = female_guide[11] as GuideSelect;
                         String chara_name = female_guideSelect.treeNodeObject.textName;
                         female_guideSelect = null;
-                        female_charas.Add(female_chara_root, chara_name);   
+                        female_charas.Add(female_chara_root, chara_name);
                         charas.Add(female_chara_root, chara_name);
                     }
                     string male_chara = "chaM_00" + i.ToString();
@@ -702,7 +793,7 @@ namespace KK_osr2_sr6_link
                     foreach (KeyValuePair<GameObject, String> male_chara in male_charas)
                     {
                         Action_data data = new Action_data();
-                        data.charas_name =  $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})" ;
+                        data.charas_name = $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})";
                         data.inserts = new List<float>();
                         data.surges = new List<float>();
                         data.sways = new List<float>();
@@ -766,7 +857,7 @@ namespace KK_osr2_sr6_link
                         maleRoot = male_chara.Key;
                         foreach (Action_data data in action_list)
                         {
-                            if (data.charas_name == $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})" )
+                            if (data.charas_name == $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})")
                             {
                                 BoneSet bs = bone_cache[data.charas_name];   // 掃描開始時已抓好,這裡不再搜場景
                                 femalehead = bs.head;
@@ -871,7 +962,7 @@ namespace KK_osr2_sr6_link
                                     data.handjobR_twists.Add(handjobR_twist);
                                     data.handjobR_rolls.Add(handjobR_roll);
                                     data.handjobR_pitchs.Add(handjobR_pitch);
-                                    data.bodywidths.Add(bodywidth);                            
+                                    data.bodywidths.Add(bodywidth);
                                 }
                             }
                         }
@@ -937,9 +1028,6 @@ namespace KK_osr2_sr6_link
                 }
             }
         }
-             
-        
-
 
         private void ReceiveClient()
         {
@@ -959,8 +1047,12 @@ namespace KK_osr2_sr6_link
                             continue;
                         }
                         string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        string[] get = receivedData.Split(':');
-                        int way = (int)int.Parse(get[0]);
+                        string[] get = receivedData.Split(new[] { ':' }, 2);
+                        if (!int.TryParse(get[0], out int way))
+                        {
+                            Logger.LogInfo("ReceiveClient invalid command.");
+                            continue;
+                        }
                         if (way == 0)
                         {
                             if (Timeline.Timeline.isPlaying) { Timeline.Timeline.Pause(); }
@@ -973,7 +1065,7 @@ namespace KK_osr2_sr6_link
                         }
                         else if (way == 2)
                         {
-                            string chara = get[1];    
+                            string chara = get[1];
                             int rootStart = chara.IndexOf("chaF_");
                             if (rootStart == -1)
                             {
@@ -1003,9 +1095,10 @@ namespace KK_osr2_sr6_link
                                 chara_guideSelect.treeNodeObject.Select();
                                 chara_guideSelect = null;
                             }
-                           
+
                         }
-                        else if (way == 3) {
+                        else if (way == 3)
+                        {
                             string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
                             int femaleRootStart = charas.IndexOf("chaF_");
                             if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
@@ -1032,7 +1125,7 @@ namespace KK_osr2_sr6_link
                                 malechara_guideSelect = null;
                             }
                         }
-                        
+
                         else if (way == 4)
                         {
                             string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
@@ -1060,7 +1153,19 @@ namespace KK_osr2_sr6_link
                                 femalechara_guideSelect = null;
                                 malechara_guideSelect = null;
                             }
-                        }                        
+                        }
+                        else if (way == 5)
+                        {
+                            string profileKey = get.Length > 1 ? get[1] : "";
+                            Logger.LogInfo("profile command 5 received: key=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey));
+                            if (!TrySetCurrentProfileKey(profileKey))
+                                Logger.LogInfo("Invalid profile key received.");
+                            else
+                            {
+                                RequestProfileSave();
+                                Logger.LogInfo("profile command 5 accepted; card save queued");
+                            }
+                        }
                     }
                     catch (Exception e) { Logger.LogInfo("ReceiveClient error: " + e.Message); }
                 }
@@ -1071,15 +1176,10 @@ namespace KK_osr2_sr6_link
             }
         }
 
-
         void OnDestroy()
         {
             end = true;
             try { clientSocket?.Close(); } catch { }   // 踹醒卡在 Receive block 的監聽執行緒
         }
-
     }
-
-
 }
-

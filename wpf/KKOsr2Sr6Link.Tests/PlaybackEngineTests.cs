@@ -58,4 +58,12 @@ public class PlaybackEngineTests
         var l0 = e.ComputeCommands(0).Single(c => c.Axis == Axis.L0);
         Assert.Equal(900, l0.ScaledValue); // 999 raw -> max
     }
+
+    [Fact]
+    public void OutOfRangeIndex_EmitsNoCommand()
+    {
+        var e = WithL0(0, 999);
+        Assert.Empty(e.ComputeCommands(-1));
+        Assert.Empty(e.ComputeCommands(2));
+    }
 }

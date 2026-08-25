@@ -66,9 +66,11 @@ public sealed class PlaybackEngine
     public List<AxisCommand> ComputeCommands(int index)
     {
         var commands = new List<AxisCommand>(6);
+        if (index < 0) return commands;
         for (int a = 0; a < 6; a++)
         {
             var values = AxisValues[a];
+            if (index >= values.Count) continue;
             for (int i = index + 1; i < values.Count && i >= 0; i++)
             {
                 if (values[i] == -1) continue;

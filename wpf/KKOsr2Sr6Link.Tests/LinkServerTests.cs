@@ -15,9 +15,27 @@ public class LinkServerTests
         Assert.Equal("C:/x/scene.txt", m.Path);
         Assert.Equal(42, m.Index);
         Assert.Equal(0.1, m.Sleep, 5);
+        Assert.Equal("", m.ProfileKey);
+
+        Assert.True(LinkServer.TryParse("C:/x/scene.txt|42|0.1|shared-v1", out var shared));
+        Assert.Equal("shared-v1", shared.ProfileKey);
 
         Assert.False(LinkServer.TryParse("incomplete", out _));
         Assert.False(LinkServer.TryParse("", out _));
+    }
+
+    [Fact]
+    public void ProfileBinding_IsNotBlockedByTimelineThrottle()
+    {
+        using var server = new LinkServer();
+        server.Start("127.0.0.1", 0);
+        using var client = new TcpClient();
+        client.Connect("127.0.0.1", server.ListeningPort);
+        WaitFor(() => server.IsConnected);
+
+        Assert.True(server.SendPlay());
+        Assert.True(server.SendProfileBinding("shared-v1"));
+        Assert.True(server.SendProfileBinding(null));
     }
 
     [Fact]

@@ -27,12 +27,25 @@ One folder per component (file paths below are written relative to these):
 - Open in Qt Creator, or: `qmake && make` (Qt 6, `core gui network serialport websockets widgets`, C++17).
 - The `.pro` is the source of truth for which `.cpp`/`.ui`/`.qrc` files compile — `.sln`/`.csproj` are *not* for the Qt code.
 
-**C# plugin** (`plugin/kk_osr2_sr6_link.csproj`, .NET Framework **3.5**, output type Library):
+**C# plugin** (`plugin/kk_osr2_sr6_link.csproj`, .NET Framework **4.8**, output type Library):
 - Build with MSBuild / Visual Studio. Debug config writes the DLL straight into a local game install at `..\..\..\galgame\kk\Koikatu\BepInEx\plugins\` — that path is hardcoded and will only work on the original author's machine; adjust `<OutputPath>` if building elsewhere.
 - References (`Assembly-CSharp`, `BepInEx`, `KKAPI`, `Timeline`, `UnityEngine`, `0Harmony`) all resolve via `HintPath` into that same game install. No NuGet.
+- Release is the deployment configuration. Build with `dotnet build plugin/kk_osr2_sr6_link.csproj --configuration Release --no-restore`; the output is `plugin/bin/Release/KKS_osr2_sr6_link.dll`.
+- The plugin target must remain `v4.8`. Deploy the Release DLL only after CharaStudio is closed, then restart CharaStudio so BepInEx reloads the plugin.
 
 **WPF app** (`wpf/KKOsr2Sr6Link.Wpf/KKOsr2Sr6Link.Wpf.csproj`, .NET 8, `dotnet build` / `dotnet run`):
-- xUnit tests in `wpf/KKOsr2Sr6Link.Tests/` — `dotnet test`. The plugin and Qt app have no tests; the WPF app does.
+- Build the app in Release with `dotnet build wpf/KKOsr2Sr6Link.Wpf/KKOsr2Sr6Link.Wpf.csproj --configuration Release --no-restore`.
+- xUnit tests in `wpf/KKOsr2Sr6Link.Tests/` — run Release tests with `dotnet test wpf/KKOsr2Sr6Link.Tests/KKOsr2Sr6Link.Tests.csproj --configuration Release --no-restore`. The plugin and Qt app have no tests; the WPF app does.
+
+## Local DLL inspection
+
+- When a game API or runtime field is uncertain, inspect the installed DLLs first; do not infer behavior from method names or a different game build.
+- Load a DLL with PowerShell `[System.Reflection.Assembly]::LoadFrom(...)`, then use `GetType(...)`, `GetFields(...)`, `GetProperties(...)`, and `GetMethods(...)` to verify runtime names, visibility, signatures, and concrete generic types.
+- To inspect side effects, read `GetMethodBody().GetILAsByteArray()`, decode `System.Reflection.Emit.OpCodes`, and resolve metadata operands through `Module.ResolveMethod`, `ResolveField`, `ResolveString`, and `ResolveType`.
+- For this KKS install, use `F:\Koikatsu Sunshine\CharaStudio_Data\Managed\Assembly-CSharp.dll` and the matching BepInEx/KKSAPI assemblies as the reference source.
+- Verify write targets and serialization layers before invoking game APIs. In the installed build, `Studio.Studio.SaveScene()` creates a new timestamped scene card, while direct `studio.sceneInfo.Save(scenePath)` writes only the scene PNG and can bypass the complete ExtendedSave / IDAT payload. To overwrite an existing card safely, keep the full save pipeline and redirect its final `SceneInfo.Save` path only after verifying the runtime patch order.
+- In the installed build, `Studio.SystemButtonCtrl.OnClickSave()` calls the full `Studio.Studio.SaveScene()` first, then sets `Studio.NotificationScene.spriteMessage` and `waitTime = 1`, creates `Manager.Scene.Data(levelName = "StudioNotification", isAdd = true)`, and calls `Manager.Scene.LoadReserve(data, false)`. If saving is already handled elsewhere, reuse only this post-save notification sequence; do not call `OnClickSave()` again because it saves a second time. All Unity calls must stay on the main thread.
+- Unity APIs must run on Unity's main thread. TCP/background handlers should queue work, and `Update()` should perform the reflected or inspected Unity call.
 
 ## Communication contract
 
@@ -71,7 +84,7 @@ Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the she
 
 - Filenames keep their original spelling: `range_silder` ("silder", not "slider"). Don't "fix" it — it's referenced everywhere.
 - `MainWindow` is frameless with custom drag handling (`mousePressEvent`/`mouseMoveEvent` + `m_drag`), so window-chrome behavior is manual.
-- The plugin pins very old API versions (KKAPI 1.38, Timeline 1.1, .NET 3.5) because Koikatu/BepInEx require them — do not upgrade target framework or references casually.
+- The plugin uses old KKAPI/Timeline APIs required by Koikatu/BepInEx, but its project target is .NET Framework 4.8 — do not lower the target framework or upgrade references casually.
 - `Collect_data` samples by **programmatically seeking** the Timeline (`Timeline.Seek` one interval per `Update` frame), not by live user playback. The six axes are geometry between bone world positions, which only exist after the pose is evaluated — you can't derive them from Timeline keyframes alone.
 - Per-scan, bone `Transform`s are looked up **once** in `bone_cache` (keyed by the pair's `charas_name`, filled by `BuildBoneSet` in the `resampled` block). Don't reintroduce per-sample `GameObject.Find` in the sampling loop — it scans the whole scene 20×/sample/pair.
 - The `ReceiveClient` socket listener runs on a **background** thread, sleeps when disconnected, and treats `Receive` returning 0 as a close. Keep it from busy-waiting (no tight loop without `Thread.Sleep`).

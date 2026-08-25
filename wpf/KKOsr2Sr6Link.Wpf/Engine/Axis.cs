@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace KKOsr2Sr6Link.Wpf.Engine;
 
@@ -45,4 +46,37 @@ public static class AxisInfo
     public static string Sr6ScriptPath(string scenePath, Axis a) => SceneStem(scenePath) + a.Infix() + ".sr6script";
     public static string FunscriptPath(string scenePath, Axis a) => SceneStem(scenePath) + a.Infix() + ".funscript";
     public static string Sr6CfgPath(string scenePath) => SceneStem(scenePath) + ".sr6cfg";
+
+    public static string Sr6RefPath(string scenePath) => SceneStem(scenePath) + ".sr6ref";
+
+    public static string ProfilesDirectory(string gameRoot)
+        => Path.Combine(gameRoot, "UserData", "KK_osr_sr6_link", "_profiles");
+
+    public static bool TryValidateProfileKey(string? profileKey, out string error)
+    {
+        error = "";
+        if (string.IsNullOrEmpty(profileKey)) { error = "Profile key is empty."; return false; }
+        if (profileKey == "." || profileKey == "..") { error = "Profile key is reserved."; return false; }
+        if (profileKey.IndexOfAny(new[] { '/', '\\', '|', ':' }) >= 0)
+        { error = "Profile key contains a forbidden separator."; return false; }
+        if (profileKey.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        { error = "Profile key contains an invalid filename character."; return false; }
+        return true;
+    }
+
+    public static bool IsValidProfileKey(string? profileKey)
+        => TryValidateProfileKey(profileKey, out _);
+
+    public static string ProfileStem(string gameRoot, string profileKey)
+    {
+        if (!TryValidateProfileKey(profileKey, out var error))
+            throw new ArgumentException(error, nameof(profileKey));
+        return Path.Combine(ProfilesDirectory(gameRoot), profileKey);
+    }
+
+    public static string ProfileRawPath(string gameRoot, string profileKey)
+        => ProfileStem(gameRoot, profileKey) + ".txt";
+
+    public static string ProfilePreviewPath(string gameRoot, string profileKey)
+        => ProfileStem(gameRoot, profileKey) + ".png";
 }

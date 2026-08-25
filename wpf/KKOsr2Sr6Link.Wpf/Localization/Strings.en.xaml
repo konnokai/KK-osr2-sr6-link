@@ -41,6 +41,18 @@
     <s:String x:Key="L.OutputRange">output range</s:String>
     <s:String x:Key="L.ConvertFunscript">converting sr6script files to funscript files</s:String>
     <s:String x:Key="L.SaveScripter">save scripter</s:String>
+    <s:String x:Key="L.ProfileSelector">shared profile</s:String>
+    <s:String x:Key="L.CreateSharedProfile">create shared</s:String>
+    <s:String x:Key="L.ForkProfile">fork profile</s:String>
+    <s:String x:Key="L.SaveSharedProfile">save shared profile</s:String>
+    <s:String x:Key="L.LoadSharedProfile">load profile</s:String>
+    <s:String x:Key="L.SelectSharedProfile">select profile</s:String>
+    <s:String x:Key="L.ProfileGalleryTitle">shared profile gallery</s:String>
+    <s:String x:Key="L.NoProfilePreview">no preview</s:String>
+    <s:String x:Key="L.PreviousPage">previous</s:String>
+    <s:String x:Key="L.NextPage">next</s:String>
+    <s:String x:Key="L.ProfilePage">page {0} / {1}</s:String>
+    <s:String x:Key="L.UnbindProfile">unbind profile</s:String>
     <s:String x:Key="L.OpenFolders">open scripts folders</s:String>
 
     <!-- settings page -->
@@ -79,6 +91,26 @@
     <s:String x:Key="St.Loaded">loaded {0}</s:String>
     <s:String x:Key="St.NoScene">no scene loaded</s:String>
     <s:String x:Key="St.SavedScripts">saved scripts</s:String>
+    <s:String x:Key="St.SharedProfileSource">source: Shared: {0}</s:String>
+    <s:String x:Key="St.SceneLocalSource">source: Scene local</s:String>
+    <s:String x:Key="St.ProfileKeyRequired">profile key is required</s:String>
+    <s:String x:Key="St.ProfileKeyInvalid">invalid profile key: {0}</s:String>
+    <s:String x:Key="St.ProfileAlreadyExists">profile already exists: {0}</s:String>
+    <s:String x:Key="St.ProfileCreated">created and bound shared profile: {0}</s:String>
+    <s:String x:Key="St.ProfileForked">forked and bound shared profile: {0}</s:String>
+    <s:String x:Key="St.SharedProfileSaved">saved shared profile: {0}</s:String>
+    <s:String x:Key="St.ProfileBound">bound shared profile: {0}</s:String>
+    <s:String x:Key="St.ProfileLoaded">loaded shared profile: {0}</s:String>
+    <s:String x:Key="St.ProfileNeedsSceneSave">save the Studio scene once to store this binding in the card</s:String>
+    <s:String x:Key="St.ProfileSaveQueued">profile binding sent; the current Studio card save was queued</s:String>
+    <s:String x:Key="St.ProfilePluginDisconnected">binding kept locally; plugin is disconnected, so the scene card was not updated</s:String>
+    <s:String x:Key="St.ProfileBroken">shared profile is broken: {0}</s:String>
+    <s:String x:Key="St.LegacyBroken">scene-local action set is incomplete: {0}</s:String>
+    <s:String x:Key="St.NoSafeActionSource">no complete action source; hardware output is disabled</s:String>
+    <s:String x:Key="St.RawUnavailable">raw scene data is unavailable; regeneration controls are disabled</s:String>
+    <s:String x:Key="St.ProfileListFailed">profile list failed: {0}</s:String>
+    <s:String x:Key="St.ProfileUnbound">profile unbound</s:String>
+    <s:String x:Key="St.PlaybackIndexOutOfRange">playback index {0} is outside the loaded action range</s:String>
     <s:String x:Key="St.SaveFailed">save failed: {0}</s:String>
     <s:String x:Key="St.ExportedFunscripts">exported 6 funscripts</s:String>
     <s:String x:Key="St.ExportFailed">export failed: {0}</s:String>

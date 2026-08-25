@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>KK_osr2_sr6_link</RootNamespace>
     <AssemblyName>KKS_osr2_sr6_link</AssemblyName>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <TargetFrameworkProfile />
@@ -46,6 +46,10 @@
     <Reference Include="KKSAPI">
       <HintPath>F:\Koikatsu Sunshine\BepInEx\plugins\KKSAPI.dll</HintPath>
     </Reference>
+    <Reference Include="KKS_ExtensibleSaveFormat">
+      <HintPath>F:\Koikatsu Sunshine\BepInEx\plugins\KKS_BepisPlugins\KKS_ExtensibleSaveFormat.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Runtime.Serialization" />
@@ -64,9 +68,22 @@
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>F:\Koikatsu Sunshine\CharaStudio_Data\Managed\UnityEngine.IMGUIModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>F:\Koikatsu Sunshine\CharaStudio_Data\Managed\UnityEngine.UI.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>F:\Koikatsu Sunshine\CharaStudio_Data\Managed\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>F:\Koikatsu Sunshine\CharaStudio_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Osr2_sr6_link.cs" />
+    <Compile Include="SceneProfileController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
