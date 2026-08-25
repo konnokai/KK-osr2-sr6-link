@@ -93,7 +93,6 @@
     <s:String x:Key="St.SavedScripts">saved scripts</s:String>
     <s:String x:Key="St.SharedProfileSource">source: Shared: {0}</s:String>
     <s:String x:Key="St.SceneLocalSource">source: Scene local</s:String>
-    <s:String x:Key="St.ProfileKeyRequired">profile key is required</s:String>
     <s:String x:Key="St.ProfileKeyInvalid">invalid profile key: {0}</s:String>
     <s:String x:Key="St.ProfileAlreadyExists">profile already exists: {0}</s:String>
     <s:String x:Key="St.ProfileCreated">created and bound shared profile: {0}</s:String>

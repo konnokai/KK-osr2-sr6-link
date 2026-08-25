@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 
 namespace KKOsr2Sr6Link.Wpf.Engine;
@@ -66,6 +67,9 @@ public static class AxisInfo
 
     public static bool IsValidProfileKey(string? profileKey)
         => TryValidateProfileKey(profileKey, out _);
+
+    public static string TimestampProfileKey(DateTime timestamp)
+        => timestamp.ToString("yyyy_MMdd_HHmm_ss_fff", CultureInfo.InvariantCulture);
 
     public static string ProfileStem(string gameRoot, string profileKey)
     {

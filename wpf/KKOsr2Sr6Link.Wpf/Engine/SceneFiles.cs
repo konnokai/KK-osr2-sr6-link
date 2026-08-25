@@ -179,6 +179,9 @@ public static class SceneFiles
     public static bool HasLegacySceneData(string stem)
         => File.Exists(stem) || HasAnyActionSetFiles(stem);
 
+    public static bool HasUnboundRawData(string stem)
+        => File.Exists(stem) && !File.Exists(AxisInfo.Sr6RefPath(stem));
+
     public static List<string> ListCompleteProfiles(string gameRoot)
     {
         string dir = AxisInfo.ProfilesDirectory(gameRoot);

@@ -93,7 +93,6 @@
     <s:String x:Key="St.SavedScripts">已儲存腳本</s:String>
     <s:String x:Key="St.SharedProfileSource">來源：共用：{0}</s:String>
     <s:String x:Key="St.SceneLocalSource">來源：場景本地</s:String>
-    <s:String x:Key="St.ProfileKeyRequired">請輸入 profile key</s:String>
     <s:String x:Key="St.ProfileKeyInvalid">profile key 無效：{0}</s:String>
     <s:String x:Key="St.ProfileAlreadyExists">profile 已存在：{0}</s:String>
     <s:String x:Key="St.ProfileCreated">已建立並綁定共用 profile：{0}</s:String>

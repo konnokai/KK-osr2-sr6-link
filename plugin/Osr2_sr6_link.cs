@@ -426,6 +426,18 @@ namespace KK_osr2_sr6_link
             }
         }
 
+        /// <summary>Sends the current scene only after KKAPI has resolved its stored profile key.</summary>
+        internal static void SendCurrentSceneMessage()
+        {
+            if (!link || scene_path == "no") return;
+            string filePath = SceneDataPath(scene_path);
+            string profileKey = CurrentProfileKey;
+            plugin_logger?.LogInfo("scene data path:" + filePath + ", raw=" + File.Exists(filePath) +
+                ", profile=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey) + ", link=" + link);
+            SendSceneMessage(BuildSceneMessage(filePath, 0, 0.1));
+            plugin_logger?.LogInfo("scene message sent after profile load");
+        }
+
         [HarmonyPostfix]
         [HarmonyPatch(typeof(SceneLoadScene), "LoadScene")]
         public static void Getscene_path(SceneLoadScene __instance, string _path)
@@ -437,17 +449,7 @@ namespace KK_osr2_sr6_link
             cycle = false;
             scene_path = _path;
             resampled = true;
-            string filePath = SceneDataPath(scene_path);
-            bool rawExists = File.Exists(filePath);
-            string profileKey = CurrentProfileKey;
-            plugin_logger?.LogInfo("scene data path:" + filePath + ", raw=" + rawExists + ", profile=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey) + ", link=" + link);
-            if ((rawExists || !string.IsNullOrEmpty(profileKey)) && link)
-            {
-                SendSceneMessage(BuildSceneMessage(filePath, 0, 0.1));
-                plugin_logger?.LogInfo("scene message sent");
-            }
-            else
-                plugin_logger?.LogInfo("scene message skipped: no raw data/profile or TCP link");
+            plugin_logger?.LogInfo("scene message waiting for profile metadata");
         }
 
         public string FindRootObjectPath(string rootName, string targetName)
@@ -1025,6 +1027,8 @@ namespace KK_osr2_sr6_link
                             }
                         }
                     }
+                    // Notify only after the writer closes so WPF reads a complete new sample.
+                    if (link) SendSceneMessage(BuildSceneMessage(filePath, 0, interval_time));
                 }
             }
         }

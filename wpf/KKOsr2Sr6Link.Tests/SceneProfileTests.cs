@@ -18,6 +18,14 @@ public class SceneProfileTests
     }
 
     [Fact]
+    public void TimestampProfileKey_UsesFilesystemSafeStudioStyle()
+    {
+        var timestamp = new DateTime(2026, 8, 25, 23, 59, 12, 345);
+        Assert.Equal("2026_0825_2359_12_345", AxisInfo.TimestampProfileKey(timestamp));
+        Assert.True(AxisInfo.IsValidProfileKey(AxisInfo.TimestampProfileKey(timestamp)));
+    }
+
+    [Fact]
     public void Sr6Ref_RoundTripsOneProfileKey()
     {
         var path = Path.Combine(Path.GetTempPath(), "kk_" + Path.GetRandomFileName() + ".sr6ref");
@@ -136,6 +144,23 @@ public class SceneProfileTests
             File.Delete(stem);
             SceneFiles.SaveActionSet(stem, Axes(1), Parts());
             Assert.True(SceneFiles.HasLegacySceneData(stem));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void RawSample_IsUnboundUntilSr6RefExists()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "kkunbound_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var stem = Path.Combine(dir, "scene.txt");
+            File.WriteAllText(stem, "raw");
+            Assert.True(SceneFiles.HasUnboundRawData(stem));
+
+            SceneFiles.SaveSr6Ref(AxisInfo.Sr6RefPath(stem), "shared");
+            Assert.False(SceneFiles.HasUnboundRawData(stem));
         }
         finally { Directory.Delete(dir, true); }
     }

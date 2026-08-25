@@ -471,7 +471,14 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (_filePath != msg.Path || _cardProfileKey != msg.ProfileKey)
+            bool sameScene = _filePath == msg.Path && _cardProfileKey == msg.ProfileKey;
+            bool reloadForNewSample = false;
+            if (sameScene && _actionSource == SceneActionSource.SharedProfile)
+            {
+                string path = ResolveScenePath(msg.Path);
+                reloadForNewSample = !string.IsNullOrEmpty(path) && SceneFiles.HasUnboundRawData(path);
+            }
+            if (!sameScene || reloadForNewSample)
                 LoadScene(msg.Path, msg.ProfileKey);
 
             int index = msg.Index;
@@ -959,7 +966,7 @@ public partial class MainWindow : Window
     private bool TryReadNewProfileKey(out string key)
     {
         key = ProfileKeyBox.Text.Trim();
-        if (key.Length == 0) { Status(L("St.ProfileKeyRequired")); return false; }
+        if (key.Length == 0) key = AxisInfo.TimestampProfileKey(DateTime.Now);
         if (!AxisInfo.TryValidateProfileKey(key, out var error))
         { Status(L("St.ProfileKeyInvalid", error)); return false; }
         string stem = AxisInfo.ProfileStem(GameRootFor(ResolvedPath()), key);

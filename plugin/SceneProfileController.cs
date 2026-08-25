@@ -56,10 +56,16 @@ namespace KK_osr2_sr6_link
 
         protected override void OnSceneLoad(SceneOperationKind operation, ReadOnlyDictionary<int, ObjectCtrlInfo> loadedItems)
         {
-            if (operation == SceneOperationKind.Import) return;
+            if (operation == SceneOperationKind.Import)
+            {
+                Osr2_sr6_link.LogInfo("scene profile load operation=Import profile=" +
+                    (string.IsNullOrEmpty(Osr2_sr6_link.CurrentProfileKey) ? "<none>" : Osr2_sr6_link.CurrentProfileKey));
+                return;
+            }
             if (operation == SceneOperationKind.Clear)
             {
                 Osr2_sr6_link.TrySetCurrentProfileKey("");
+                Osr2_sr6_link.LogInfo("scene profile load operation=Clear profile=<none>");
                 return;
             }
 
@@ -72,6 +78,9 @@ namespace KK_osr2_sr6_link
                 if (!string.IsNullOrEmpty(stored) && Osr2_sr6_link.IsValidProfileKey(stored)) key = stored;
             }
             Osr2_sr6_link.TrySetCurrentProfileKey(key);
+            Osr2_sr6_link.LogInfo("scene profile load operation=" + operation + " profile=" +
+                (string.IsNullOrEmpty(key) ? "<none>" : key));
+            Osr2_sr6_link.SendCurrentSceneMessage();
         }
 
         protected override void OnSceneSave()
