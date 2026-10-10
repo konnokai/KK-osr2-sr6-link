@@ -84,6 +84,7 @@
   <ItemGroup>
     <Compile Include="Osr2_sr6_link.cs" />
     <Compile Include="SceneProfileController.cs" />
+    <Compile Include="SceneTimelineProbe.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

@@ -284,9 +284,15 @@ Create or reuse one child badge object per thumbnail. Refreshing pages must not 
 
 Start with direct `File.Exists` and small-file validation. Add caching only if runtime measurement shows the built-in browser becomes slow.
 
+Timeline badge (top-right corner, blue `TL`):
+
+- Shown when the scene card holds Timeline data with at least one `<keyframe`. Timeline writes its `timeline` entry on every save, so an empty timeline (`<root ... />`) gets no badge.
+- `SceneTimelineProbe` reads the card without loading it. ExtendedSave writes its scene block (`"KKEx"` string, int version 3, int length, MessagePack bytes) at the very end of the PNG. The probe scans backward from EOF in 1 MB chunks for the MessagePack key `timeline` followed by `[version, {"sceneInfo": <xml>}]`, and stops at the block header if the key is absent. Cards with no ExtendedSave block are read to the start and get no badge.
+- Results are cached in memory by path, size, and write time. Measured on 9215 local scenes: average 1.25 MB read per card, 49 MB at most.
+
 Known limitation:
 
-- A scene card copied from another machine with embedded profile metadata but no local `.sr6ref` cannot show a pre-load badge through the public ExtendedSave API. Its reference is recreated after the first load. Arbitrary PNG ExtendedSave parsing is outside this phase.
+- A scene card copied from another machine with embedded profile metadata but no local `.sr6ref` cannot show a pre-load badge through the public ExtendedSave API. Its reference is recreated after the first load. The SR6 badge does not parse PNG ExtendedSave data; only the Timeline badge reads the `timeline` entry.
 
 ## 9. Legacy Migration
 
@@ -438,7 +444,7 @@ The feature is complete when all of these are demonstrated:
 - Automatic grouping of old scenes by filename, hash, or guessed similarity.
 - Profile rename and deletion management.
 - Batch rewriting all existing scene cards.
-- Parsing arbitrary scene PNG ExtendedSave data only to show pre-load badges.
+- Parsing scene PNG ExtendedSave data for the SR6 badge (the Timeline badge reads only the `timeline` entry).
 - Qt shared-profile creation or selection UI.
 - Network framing redesign for the existing TCP protocol.
 - Live file watching or automatic reload while another process edits a profile.

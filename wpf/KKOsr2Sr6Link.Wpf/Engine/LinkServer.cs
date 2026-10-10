@@ -30,6 +30,8 @@ public sealed class LinkServer : IDisposable
     private readonly Func<long> _clock;
     private readonly object _sendLock = new();
     private TcpListener? _listener;
+    // 別的程式也可能連進這個 port，所以每條連線都要留著，才能在它斷掉後換回插件那條
+    private readonly List<(TcpClient Client, NetworkStream Stream)> _clients = new();
     private TcpClient? _client;
     private NetworkStream? _stream;
     private CancellationTokenSource? _cts;
@@ -63,12 +65,14 @@ public sealed class LinkServer : IDisposable
             while (!ct.IsCancellationRequested)
             {
                 var client = await _listener!.AcceptTcpClientAsync(ct).ConfigureAwait(false);
-                // Only one client at a time, matching the single-socket Qt design.
-                _client = client;
-                _stream = client.GetStream();
-                ClientAddress = ((IPEndPoint?)client.Client.RemoteEndPoint)?.Address.ToString() ?? "";
+                var stream = client.GetStream();
+                lock (_sendLock)
+                {
+                    _clients.Add((client, stream));
+                    SetCurrent(client, stream);
+                }
                 ClientConnected?.Invoke();
-                _ = ReadLoopAsync(client, _stream, ct);
+                _ = ReadLoopAsync(client, stream, ct);
             }
         }
         catch (OperationCanceledException) { }
@@ -93,9 +97,15 @@ public sealed class LinkServer : IDisposable
                 foreach (var line in TakeLines(pending))
                 {
                     if (line == ClearMessage)
+                    {
+                        Promote(client, stream);
                         SceneCleared?.Invoke();
+                    }
                     else if (TryParse(line, out var msg))
+                    {
+                        Promote(client, stream);
                         MessageReceived?.Invoke(msg);
+                    }
                 }
             }
         }
@@ -104,9 +114,47 @@ public sealed class LinkServer : IDisposable
         catch (ObjectDisposedException) { }
         finally
         {
-            if (ReferenceEquals(_client, client)) { _client = null; _stream = null; }
-            ClientDisconnected?.Invoke();
+            bool currentChanged;
+            bool anyLeft;
+            lock (_sendLock)
+            {
+                _clients.Remove((client, stream));
+                currentChanged = ReferenceEquals(_client, client);
+                if (currentChanged)
+                {
+                    if (_clients.Count > 0) SetCurrent(_clients[^1].Client, _clients[^1].Stream);
+                    else SetCurrent(null, null);
+                }
+                anyLeft = _client != null;
+            }
+            // 不關掉的話 socket 會一直開著，對方以為還連著，但已經沒人在讀
+            try { client.Dispose(); } catch { }
+            if (!anyLeft) ClientDisconnected?.Invoke();
+            else if (currentChanged) ClientConnected?.Invoke();
         }
+    }
+
+    /// <summary>A valid plugin message marks this connection as the one that receives commands.</summary>
+    private void Promote(TcpClient client, NetworkStream stream)
+    {
+        lock (_sendLock)
+        {
+            if (ReferenceEquals(_client, client) || !_clients.Contains((client, stream))) return;
+            SetCurrent(client, stream);
+        }
+        ClientConnected?.Invoke();
+    }
+
+    // 呼叫端要先拿 _sendLock，TrySend 才不會讀到換到一半的 _client / _stream
+    private void SetCurrent(TcpClient? client, NetworkStream? stream)
+    {
+        _client = client;
+        _stream = stream;
+        string address = "";
+        try { address = ((IPEndPoint?)client?.Client.RemoteEndPoint)?.Address.ToString() ?? ""; }
+        catch (ObjectDisposedException) { }
+        catch (SocketException) { }
+        ClientAddress = address;
     }
 
     /// <summary>Remove every complete '\n'-terminated line from <paramref name="pending"/>; the unfinished tail stays.</summary>
@@ -196,10 +244,17 @@ public sealed class LinkServer : IDisposable
     public void Stop()
     {
         try { _cts?.Cancel(); } catch { }
-        try { _stream?.Dispose(); } catch { }
-        try { _client?.Dispose(); } catch { }
+        (TcpClient Client, NetworkStream Stream)[] clients;
+        lock (_sendLock)
+        {
+            clients = _clients.ToArray();
+            _clients.Clear();
+            SetCurrent(null, null);
+        }
+        foreach (var (client, _) in clients)
+            try { client.Dispose(); } catch { }
         try { _listener?.Stop(); } catch { }
-        _stream = null; _client = null; _listener = null;
+        _listener = null;
         _cts?.Dispose(); _cts = null;
         _nextAllowed = 0;
     }

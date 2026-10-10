@@ -468,7 +468,7 @@ public partial class MainWindow : Window
         if (_serverRunning) { _server.Stop(); _serverRunning = false; RunServerBtn.Content = L("L.RunServer"); ClientLabel.Text = L("L.ServerStopped"); return; }
         try
         {
-            int port = int.TryParse(ServerPortBox.Text, out var p) ? p : 8000;
+            int port = int.TryParse(ServerPortBox.Text, out var p) ? p : AppConfig.DefaultServerPort;
             _server.Start(ServerIpBox.Text, port);
             _serverRunning = true;
             RunServerBtn.Content = L("L.StopServer");

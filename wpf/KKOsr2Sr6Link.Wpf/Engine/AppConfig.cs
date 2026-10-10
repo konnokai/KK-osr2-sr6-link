@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace KKOsr2Sr6Link.Wpf.Engine;
 
 /// <summary>
@@ -10,16 +12,18 @@ public sealed class AppConfig
     private readonly IniConfig _ini;
 
     public const string DefaultPath = "config.ini";
+    public const int DefaultServerPort = 43846;
 
     public AppConfig(string path = DefaultPath)
     {
         _ini = new IniConfig(path);
         if (!_ini.FileExisted)
         {
-            // Same defaults the Qt app writes when no config exists.
+            // Same defaults the Qt app writes when no config exists, except the port
+            // (other local tools probe 8000, so the plugin and WPF moved to DefaultServerPort).
             _ini.Set("SerialPort", "baudrate", "115200");
             _ini.Set("Server", "Serverip", "127.0.0.1");
-            _ini.Set("Server", "Serverport", "8000");
+            _ini.Set("Server", "Serverport", DefaultServerPort.ToString(CultureInfo.InvariantCulture));
             _ini.Set("Game", "game root", "");
             _ini.Set("Intiface Central", "webserverip", "ws://localhost:12345");
             _ini.Set("Scripter edit", "rebuild all axes", "0");
@@ -47,7 +51,7 @@ public sealed class AppConfig
     /// </summary>
     public string ServerPort
     {
-        get => _ini.Get("Server", "Serverport", "8000");
+        get => _ini.Get("Server", "Serverport", DefaultServerPort.ToString(CultureInfo.InvariantCulture));
         set { _ini.Set("Server", "Serverport", value); _ini.Save(); }
     }
 

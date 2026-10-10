@@ -10,7 +10,7 @@ Introduction: https://discuss.eroscripts.com/t/for-the-koikatu-charastudio-provi
 - **Qt desktop app** (`qt/`) — receives the motion, lets you edit the per-axis curves, and drives the hardware. (Qt 6.)
 - **WPF desktop app** (`wpf/`) — a .NET 8 port of the desktop app. Same socket protocol and `config.ini`.
 
-The plugin (TCP client) connects to the desktop app (TCP server) on `127.0.0.1:8000` by default.
+The plugin (TCP client) connects to the desktop app (TCP server) on `127.0.0.1:43846` by default.
 
 ## Language
 

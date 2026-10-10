@@ -140,7 +140,7 @@
                             <TextBlock Grid.Column="0" Text="{DynamicResource L.Server}" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Grid.Column="1" x:Name="ServerIpBox" Text="127.0.0.1" Margin="0,0,16,0"/>
                             <TextBlock Grid.Column="2" Text="{DynamicResource L.Port}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBox Grid.Column="3" x:Name="ServerPortBox" Text="8000"/>
+                            <TextBox Grid.Column="3" x:Name="ServerPortBox" Text="43846"/>
                         </Grid>
 
                         <Button Content="{DynamicResource L.ResetDevices}" Click="Reset_Click" Margin="0,8,0,0"/>

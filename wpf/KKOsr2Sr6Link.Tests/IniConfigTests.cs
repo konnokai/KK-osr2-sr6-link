@@ -36,7 +36,7 @@ public class IniConfigTests
             var cfg = new AppConfig(path);
             Assert.Equal("115200", cfg.BaudRate);
             Assert.Equal("127.0.0.1", cfg.ServerIp);
-            Assert.Equal("8000", cfg.ServerPort);
+            Assert.Equal("43846", cfg.ServerPort);
             Assert.Equal("ws://localhost:12345", cfg.WebServerIp);
             Assert.False(cfg.RebuildAllAxes);
             Assert.True(File.Exists(path));

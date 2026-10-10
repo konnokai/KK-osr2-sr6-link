@@ -143,6 +143,82 @@ public class LinkServerTests
         Assert.False(gotScene);
     }
 
+    [Fact]
+    public void ShortLivedSecondClient_KeepsPluginConnection()
+    {
+        using var server = new LinkServer();
+        int connected = 0, disconnected = 0;
+        server.ClientConnected += () => Interlocked.Increment(ref connected);
+        server.ClientDisconnected += () => Interlocked.Increment(ref disconnected);
+        server.Start("127.0.0.1", 0);
+        using var plugin = new TcpClient();
+        plugin.Connect("127.0.0.1", server.ListeningPort);
+        WaitFor(() => server.IsConnected);
+
+        // 別的程式連上 port 又馬上斷開，不能把插件的連線一起當成斷線
+        using (var other = new TcpClient())
+        {
+            other.Connect("127.0.0.1", server.ListeningPort);
+            WaitFor(() => Volatile.Read(ref connected) == 2);
+        }
+        WaitFor(() => Volatile.Read(ref connected) == 3);
+
+        Assert.Equal(0, Volatile.Read(ref disconnected));
+        Assert.True(server.SendPlay());
+        Assert.Equal("0:\n", ReadText(plugin, 3));
+    }
+
+    [Fact]
+    public void ClientThatSendsSceneMessage_ReceivesCommands()
+    {
+        using var server = new LinkServer();
+        int connected = 0;
+        server.ClientConnected += () => Interlocked.Increment(ref connected);
+        server.Start("127.0.0.1", 0);
+        using var plugin = new TcpClient();
+        plugin.Connect("127.0.0.1", server.ListeningPort);
+        WaitFor(() => Volatile.Read(ref connected) == 1);
+        using var other = new TcpClient();
+        other.Connect("127.0.0.1", server.ListeningPort);
+        WaitFor(() => Volatile.Read(ref connected) == 2);
+
+        // 後連上的連線沒送過場景訊息；插件一送訊息，指令就要改送回插件
+        var bytes = Encoding.UTF8.GetBytes("scene.txt|1|0.1\n");
+        plugin.GetStream().Write(bytes, 0, bytes.Length);
+        WaitFor(() => Volatile.Read(ref connected) == 3);
+
+        Assert.True(server.SendPlay());
+        Assert.Equal("0:\n", ReadText(plugin, 3));
+    }
+
+    [Fact]
+    public void LastClientClosing_RaisesDisconnected()
+    {
+        using var server = new LinkServer();
+        using var disconnected = new ManualResetEventSlim();
+        server.ClientDisconnected += () => disconnected.Set();
+        server.Start("127.0.0.1", 0);
+        using (var plugin = new TcpClient())
+        {
+            plugin.Connect("127.0.0.1", server.ListeningPort);
+            WaitFor(() => server.IsConnected);
+        }
+
+        Assert.True(disconnected.Wait(TimeSpan.FromSeconds(2)));
+        Assert.False(server.IsConnected);
+        Assert.False(server.SendPlay());
+    }
+
+    private static string ReadText(TcpClient client, int length)
+    {
+        var buffer = new byte[64];
+        var text = "";
+        client.ReceiveTimeout = 2000;
+        while (text.Length < length)
+            text += Encoding.UTF8.GetString(buffer, 0, client.GetStream().Read(buffer, 0, buffer.Length));
+        return text;
+    }
+
     private static void WaitFor(Func<bool> cond)
     {
         var deadline = DateTime.UtcNow.AddSeconds(2);

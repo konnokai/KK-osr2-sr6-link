@@ -216,6 +216,8 @@ namespace KK_osr2_sr6_link
         public ConfigEntry<string> server_ip;
         private IPAddress serverIP;
         public ConfigEntry<int> server_port;
+        // 其他本機工具會連 8000，跟 WPF 的 AppConfig.DefaultServerPort 一起改
+        private const int DefaultServerPort = 43846;
         private int port;
 
         private void Link_server()
@@ -259,7 +261,7 @@ namespace KK_osr2_sr6_link
             Logger.LogInfo("KKS osr2 sr6 link: Harmony patches applied");
             Logger.LogInfo("KKS osr2 sr6 link start");
             server_ip = Config.Bind("link setting", "Server IP", "127.0.0.1", "input app server ip");
-            server_port = Config.Bind("link setting", "Server port", 8000, "input app server port id");
+            server_port = Config.Bind("link setting", "Server port", DefaultServerPort, "input app server port id");
             link_interval = Config.Bind("link setting", "relink interval", 5000, "setting relink time(Millisecond)");
             autorelink = Config.Bind("link setting", "autorelink", true, "setting relink time(Millisecond)");
             Config.Bind("link setting", "Link State", "", new ConfigDescription("Click to connect app", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer1 }));
@@ -717,7 +719,7 @@ namespace KK_osr2_sr6_link
         {
             if (interval_time > 1 || interval_time < 0.1) { interval_time = 0.1; }
             if (last_interval_time != interval_time) { resampled = true; last_interval_time = interval_time; }
-            if (server_port.Value < 0 || server_port.Value > 9999) { server_port.Value = 8000; }
+            if (server_port.Value < 1 || server_port.Value > 65535) { server_port.Value = DefaultServerPort; }
         }
 
         public void Update()

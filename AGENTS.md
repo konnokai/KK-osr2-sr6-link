@@ -49,7 +49,8 @@ One folder per component (file paths below are written relative to these):
 
 ## Communication contract
 
-- Plugin is the TCP **client**, the Qt or WPF app is the TCP **server**. Default `127.0.0.1:8000` (configurable both sides; port clamped 0–9999).
+- Plugin is the TCP **client**, the Qt or WPF app is the TCP **server**. Default `127.0.0.1:43846` (configurable both sides; the plugin resets a port outside 1–65535 to 43846). The default moved off `8000` because other local tools probe that port.
+- Other programs may also connect to that port. The WPF `LinkServer` keeps every open connection and sends commands to one of them: the newest connection, or the most recent one that sent a valid plugin message (`path|...` or `clear`). When a connection closes, the server disposes it and falls back to the newest open one. `ClientDisconnected` is raised only when no connection is left.
 - 6 axes follow the OSR2/SR6 / TCode convention used throughout the codebase:
   - `L0` insert (stroke), `L1` surge, `L2` sway
   - `R0` twist, `R1` roll, `R2` pitch

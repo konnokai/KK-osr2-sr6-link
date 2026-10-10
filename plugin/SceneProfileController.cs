@@ -186,9 +186,11 @@ namespace KK_osr2_sr6_link
                         continue;
                     }
                     BadgeState state = string.IsNullOrEmpty(path) ? BadgeState.None : GetBadgeState(path);
+                    bool timeline = !string.IsNullOrEmpty(path) && HasTimeline(path);
                     Osr2_sr6_link.LogInfo("scene badge slot=" + i + " absolute=" + absoluteIndex +
-                        " path=" + path + " state=" + state);
+                        " path=" + path + " state=" + state + " timeline=" + timeline);
                     SetBadge(button, state);
+                    SetTimelineBadge(button, timeline);
                 }
             }
             catch (Exception ex)
@@ -308,10 +310,30 @@ namespace KK_osr2_sr6_link
             }
         }
 
+        private static bool HasTimeline(string scenePath)
+        {
+            try { return SceneTimelineProbe.HasKeyframes(scenePath); }
+            catch (Exception ex)
+            {
+                Osr2_sr6_link.LogInfo("scene badge timeline read failed: " + scenePath + " error=" + ex.Message);
+                return false;
+            }
+        }
+
+        private static void SetTimelineBadge(GameObject thumbnail, bool visible)
+        {
+            Transform existing = thumbnail.transform.Find("KKOsr2Sr6Link.TLBadge");
+            GameObject badge = existing == null ? CreateBadge(thumbnail.transform, "KKOsr2Sr6Link.TLBadge", true) : existing.gameObject;
+            badge.SetActive(visible);
+            if (!visible) return;
+            badge.GetComponent<Image>().color = new Color(0.15f, 0.4f, 0.85f, 0.95f);
+            badge.transform.Find("Text").GetComponent<Text>().text = "TL";
+        }
+
         private static void SetBadge(GameObject thumbnail, BadgeState state)
         {
             Transform existing = thumbnail.transform.Find("KKOsr2Sr6Link.SR6Badge");
-            GameObject badge = existing == null ? CreateBadge(thumbnail.transform) : existing.gameObject;
+            GameObject badge = existing == null ? CreateBadge(thumbnail.transform, "KKOsr2Sr6Link.SR6Badge", false) : existing.gameObject;
             if (state == BadgeState.None)
             {
                 badge.SetActive(false);
@@ -338,15 +360,16 @@ namespace KK_osr2_sr6_link
             }
         }
 
-        private static GameObject CreateBadge(Transform parent)
+        private static GameObject CreateBadge(Transform parent, string name, bool topRight)
         {
-            var badge = new GameObject("KKOsr2Sr6Link.SR6Badge", typeof(RectTransform), typeof(Image));
+            var badge = new GameObject(name, typeof(RectTransform), typeof(Image));
             badge.transform.SetParent(parent, false);
             var rect = badge.GetComponent<RectTransform>();
-            rect.anchorMin = new Vector2(0, 1);
-            rect.anchorMax = new Vector2(0, 1);
-            rect.pivot = new Vector2(0, 1);
-            rect.anchoredPosition = new Vector2(4, -4);
+            float x = topRight ? 1 : 0;
+            rect.anchorMin = new Vector2(x, 1);
+            rect.anchorMax = new Vector2(x, 1);
+            rect.pivot = new Vector2(x, 1);
+            rect.anchoredPosition = new Vector2(topRight ? -4 : 4, -4);
             rect.sizeDelta = new Vector2(40, 20);
             var labelObject = new GameObject("Text", typeof(RectTransform), typeof(Text));
             labelObject.transform.SetParent(badge.transform, false);
