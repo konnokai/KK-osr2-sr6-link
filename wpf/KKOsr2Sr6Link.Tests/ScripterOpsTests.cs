@@ -43,6 +43,42 @@ public class ScripterOpsTests
     }
 
     [Fact]
+    public void Segments_ConnectEachPointToPreviousPoint_SkippingLeadingGap()
+    {
+        var values = new List<int> { -1, 100, -1, 300, 400 };
+        Assert.Equal(new[] { (1, 3), (3, 4) }, ScripterOps.Segments(values).ToArray());
+    }
+
+    [Fact]
+    public void RemoveDuplicateStacks_KeepsEndpoints()
+    {
+        var values = new List<int> { 10, 20, 30, 40 };
+        var kept = ScripterOps.RemoveDuplicateStacks(values, new List<int> { 0, 1, 2, 3 });
+        Assert.Equal(new List<int> { 1 }, kept);
+        Assert.Equal(new List<int> { 10, 20, -1, 40 }, values);
+    }
+
+    [Fact]
+    public void MoveHorizontal_EndpointSource_RejectedWithoutChange()
+    {
+        var values = new List<int> { 10, 20, 30, 40, 50 };
+        var old = new List<int>(values);
+        var sel = new List<int> { 0, 2 };
+        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, sel, 1));
+        Assert.Equal(old, values);
+    }
+
+    [Fact]
+    public void MoveHorizontal_TargetOutOfRange_RejectedWithoutChange()
+    {
+        var values = new List<int> { 10, 20, 30, 40, 50 };
+        var old = new List<int>(values);
+        var sel = new List<int> { 2, 3 };
+        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, sel, 1));
+        Assert.Equal(old, values);
+    }
+
+    [Fact]
     public void SelectPeaks_FindsLocalMaxima()
     {
         var values = new List<int> { 0, 800, 100, 900, 50 };

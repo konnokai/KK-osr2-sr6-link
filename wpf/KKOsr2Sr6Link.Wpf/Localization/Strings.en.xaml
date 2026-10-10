@@ -90,6 +90,7 @@
     <s:String x:Key="St.SceneNotFound">scene file not found: {0}</s:String>
     <s:String x:Key="St.Loaded">loaded {0}</s:String>
     <s:String x:Key="St.NoScene">no scene loaded</s:String>
+    <s:String x:Key="St.SceneCleared">scene cleared in Studio; unsaved edits were discarded</s:String>
     <s:String x:Key="St.SavedScripts">saved scripts</s:String>
     <s:String x:Key="St.SharedProfileSource">source: Shared: {0}</s:String>
     <s:String x:Key="St.SceneLocalSource">source: Scene local</s:String>

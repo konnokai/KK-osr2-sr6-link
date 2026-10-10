@@ -65,6 +65,7 @@ namespace KK_osr2_sr6_link
             if (operation == SceneOperationKind.Clear)
             {
                 Osr2_sr6_link.TrySetCurrentProfileKey("");
+                Osr2_sr6_link.ClearLoadedScene();
                 Osr2_sr6_link.LogInfo("scene profile load operation=Clear profile=<none>");
                 return;
             }

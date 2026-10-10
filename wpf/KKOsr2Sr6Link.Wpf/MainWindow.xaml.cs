@@ -294,6 +294,7 @@ public partial class MainWindow : Window
     private void WireEvents()
     {
         _server.MessageReceived += msg => Dispatcher.Invoke(() => OnSceneMessage(msg));
+        _server.SceneCleared += () => Dispatcher.Invoke(OnSceneCleared);
         _server.ClientConnected += () => Dispatcher.Invoke(() => ClientLabel.Text = L("L.LinkFrom", _server.ClientAddress));
         _server.ClientDisconnected += () => Dispatcher.Invoke(() => ClientLabel.Text = L("L.ClientDisconnected"));
 
@@ -773,6 +774,26 @@ public partial class MainWindow : Window
         }
     }
 
+    // 遊戲端按了初始化。跟換場景一樣直接清掉，不自動存檔。_filePath 要清空，重新載入同一張卡片時才會真的重讀檔案
+    private void OnSceneCleared()
+    {
+        _filePath = "";
+        _rawDataPath = "";
+        _cardProfileKey = "";
+        _profileKey = "";
+        _selectedProfileKey = "";
+        _lovemakingDatas = new List<LovemakingData>();
+        _bindingNeedsSceneSave = false;
+        _invalidPlaybackIndexReported = false;
+        ClearActions();
+        ScenePathLabel.SetResourceReference(TextBlock.TextProperty, "L.NoSceneLoaded");
+        ScenePreview.Source = null;
+        RefreshSceneUi();
+        // 裝置可能停在行程末端，用 1 秒慢慢回中間，避免突然大幅移動
+        try { _engine.ResetAll(1000); Status(L("St.SceneCleared")); }
+        catch (Exception ex) { Status(L("St.ResetFailed", ex.Message)); }
+    }
+
     private void ClearActions()
     {
         for (int a = 0; a < 6; a++) _editors[a].Values = new List<int>();
@@ -790,8 +811,10 @@ public partial class MainWindow : Window
         foreach (var part in _sceneParts)
             if (CharacterPair.TrySplitLabels(part.Charas, out var female, out var male))
             { girls.Add(female); boys.Add(male); }
-        FillCombo(GirlList, girls);
-        FillCombo(BoyList, boys);
+        // 這時 _sceneParts 已是新場景，但 PartList 還指著舊的 index，不擋的話 OnCharaChanged 會改寫錯的 part
+        _syncingPart = true;
+        try { FillCombo(GirlList, girls); FillCombo(BoyList, boys); }
+        finally { _syncingPart = false; }
 
         _overview.Values = _editors[0].Values;
         _overview.SplitLines = _sceneParts.Skip(1).Select(p => p.Part).ToList();

@@ -17,6 +17,18 @@ public static class ScripterOps
         selected.Sort();
     }
 
+    /// <summary>Polyline segments: each point joins the previous point; a point with none before it draws no segment.</summary>
+    public static IEnumerable<(int from, int to)> Segments(IReadOnlyList<int> values)
+    {
+        int prev = -1;
+        for (int i = 0; i < values.Count; i++)
+        {
+            if (values[i] == -1) continue;
+            if (prev >= 0) yield return (prev, i);
+            prev = i;
+        }
+    }
+
     public static (List<int> selectedValues, List<int> selectedTimes) SelectAll(IReadOnlyList<int> values)
     {
         var sv = new List<int>();
@@ -162,7 +174,8 @@ public static class ScripterOps
         int leftIndex = (int)((float)sortedSel.Count / 2);
         int leftPoint = sortedSel[leftIndex - 1];
         sortedSel.RemoveAt(leftIndex - 1);
-        foreach (var idx in sortedSel) values[idx] = -1;
+        foreach (var idx in sortedSel)
+            if (idx != 0 && idx != values.Count - 1) values[idx] = -1;
         return new List<int> { leftPoint };
     }
 
@@ -207,18 +220,23 @@ public static class ScripterOps
         return r;
     }
 
-    /// <summary>Move selected points horizontally by delta, blanking the originals. Returns new selection.</summary>
+    /// <summary>Move selected points horizontally by delta, blanking the originals. Returns new selection,
+    /// or null (values untouched) when a source is an endpoint or a target leaves the interior.</summary>
     public static List<int>? MoveHorizontal(List<int> values, List<int> oldValues, List<int> selected, List<int> oldSelected, int delta)
     {
+        if (!CanMoveInterior(values.Count, oldSelected, delta)) return null;
         var now = new List<int>();
         for (int i = 0; i < oldSelected.Count; i++)
         {
             int ni = oldSelected[i] + delta;
-            if (ni <= 0 || ni >= values.Count - 1) return null;
             now.Add(ni);
             values[ni] = oldValues[oldSelected[i]];
             if (i < selected.Count) values[selected[i]] = -1;
         }
         return now.Distinct().ToList();
     }
+
+    // 編輯不能把頭尾兩格清成 -1，跟 DeleteSelected 一樣。整批先檢查，不然移到一半才越界，資料只會改掉一半
+    public static bool CanMoveInterior(int count, IEnumerable<int> sources, int delta)
+        => sources.All(s => s > 0 && s < count - 1 && s + delta > 0 && s + delta < count - 1);
 }

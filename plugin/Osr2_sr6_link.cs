@@ -8,6 +8,7 @@ using KKAPI.Utilities;
 using NodeCanvas.Tasks.Actions;
 using Studio;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -204,6 +205,8 @@ namespace KK_osr2_sr6_link
         private static Socket clientSocket;
         private byte[] buffer = new byte[1024];
         private Thread clientlistener;
+        // 收訊 thread 只負責排隊，指令會呼叫 Timeline / GameObject.Find，必須等 Update() 在 Unity 主執行緒執行
+        private readonly ConcurrentQueue<string> pending_commands = new ConcurrentQueue<string>();
         private bool end = false;
         private static bool link = false;
         private DateTime start_time = DateTime.Now;
@@ -426,6 +429,18 @@ namespace KK_osr2_sr6_link
             }
         }
 
+        /// <summary>Studio cleared the scene; forget the old card so a later profile save cannot overwrite it.</summary>
+        internal static void ClearLoadedScene()
+        {
+            scene_path = "no";
+            cycle = false;
+            resampled = true;
+            Interlocked.Exchange(ref profile_save_requested, 0);
+            profile_save_wait_logged = false;
+            // WPF 的 LinkServer.ClearMessage 比對同一個字串
+            SendSceneMessage("clear");
+        }
+
         /// <summary>Sends the current scene only after KKAPI has resolved its stored profile key.</summary>
         internal static void SendCurrentSceneMessage()
         {
@@ -541,7 +556,7 @@ namespace KK_osr2_sr6_link
         public float[] Dis_angle_breastsex(Vector3 p1, Vector3 p3, Vector3 p4, Vector3 p5, Vector3 p6, Vector3 p7, Vector3 p8, Vector3 p9) //penis femaleL femaleR head maleL maleR breastL breastR. 
         {
 
-            Vector3 p2 = p8 + p9;
+            Vector3 p2 = (p8 + p9) / 2;
 
             float dis = Vector3.Dot(p2 - p1, (p2 - p1).normalized);
 
@@ -700,7 +715,10 @@ namespace KK_osr2_sr6_link
 
         public void Update()
         {
+            ProcessPendingCommands();
             ProcessPendingProfileSave();
+            // 場景被清空就停掉掃描，不然下一個載入的場景會直接接著掃
+            if (scene_path == "no") start_sampled = false;
             if (scene_path != "no")
             {
                 Setting_range();
@@ -1050,132 +1068,148 @@ namespace KK_osr2_sr6_link
                             try { clientSocket.Close(); } catch { }
                             continue;
                         }
-                        string receivedData = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                        string[] get = receivedData.Split(new[] { ':' }, 2);
-                        if (!int.TryParse(get[0], out int way))
-                        {
-                            Logger.LogInfo("ReceiveClient invalid command.");
-                            continue;
-                        }
-                        if (way == 0)
-                        {
-                            if (Timeline.Timeline.isPlaying) { Timeline.Timeline.Pause(); }
-                            else { Timeline.Timeline.Play(); }
-                        }
-                        else if (way == 1)
-                        {
-                            float settime = (float)0.1 * float.Parse(get[1]);
-                            Timeline.Timeline.Seek(settime);
-                        }
-                        else if (way == 2)
-                        {
-                            string chara = get[1];
-                            int rootStart = chara.IndexOf("chaF_");
-                            if (rootStart == -1)
-                            {
-                                rootStart = chara.IndexOf("chaM_");
-                                if (rootStart == -1)
-                                {
-                                    Logger.LogInfo("cannot find chaF_ or chaM_");
-                                    return;
-                                }
-                            }
-
-                            if (rootStart + 8 > chara.Length)
-                            {
-                                Logger.LogInfo("chara data Error");
-                                return;
-                            }
-                            string chara_root = chara.Substring(rootStart, 8);
-
-                            GameObject chara_object = GameObject.Find(chara_root);
-                            Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                            if (guideObjectManager != null && chara_object != null)
-                            {
-                                Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                                GuideObject chara_guideObject = dicGuideObject[chara_object.transform];
-                                GuideBase[] chara_guide = Traverse.Create(chara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                                GuideSelect chara_guideSelect = chara_guide[11] as GuideSelect;
-                                chara_guideSelect.treeNodeObject.Select();
-                                chara_guideSelect = null;
-                            }
-
-                        }
-                        else if (way == 3)
-                        {
-                            string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
-                            int femaleRootStart = charas.IndexOf("chaF_");
-                            if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
-                            string femalechara_root = charas.Substring(femaleRootStart, 8);
-
-                            int maleRootStart = charas.IndexOf("chaM_");
-                            if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
-                            string malechara_root = charas.Substring(maleRootStart, 8);
-                            GameObject femalechara_object = GameObject.Find(femalechara_root);
-                            GameObject malechara_object = GameObject.Find(malechara_root);
-                            Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                            if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
-                            {
-                                Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                                GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
-                                GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
-                                GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                                GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                                GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
-                                GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
-                                femalechara_guideSelect.treeNodeObject.SetVisible(true);
-                                malechara_guideSelect.treeNodeObject.SetVisible(true);
-                                femalechara_guideSelect = null;
-                                malechara_guideSelect = null;
-                            }
-                        }
-
-                        else if (way == 4)
-                        {
-                            string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
-                            int femaleRootStart = charas.IndexOf("chaF_");
-                            if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
-                            string femalechara_root = charas.Substring(femaleRootStart, 8);
-
-                            int maleRootStart = charas.IndexOf("chaM_");
-                            if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
-                            string malechara_root = charas.Substring(maleRootStart, 8);
-                            GameObject femalechara_object = GameObject.Find(femalechara_root);
-                            GameObject malechara_object = GameObject.Find(malechara_root);
-                            Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                            if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
-                            {
-                                Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                                GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
-                                GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
-                                GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                                GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                                GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
-                                GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
-                                femalechara_guideSelect.treeNodeObject.SetVisible(false);
-                                malechara_guideSelect.treeNodeObject.SetVisible(false);
-                                femalechara_guideSelect = null;
-                                malechara_guideSelect = null;
-                            }
-                        }
-                        else if (way == 5)
-                        {
-                            string profileKey = get.Length > 1 ? get[1] : "";
-                            Logger.LogInfo("profile command 5 received: key=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey));
-                            if (!TrySetCurrentProfileKey(profileKey))
-                                Logger.LogInfo("Invalid profile key received.");
-                            else
-                            {
-                                RequestProfileSave();
-                                Logger.LogInfo("profile command 5 accepted; card save queued");
-                            }
-                        }
+                        pending_commands.Enqueue(Encoding.UTF8.GetString(buffer, 0, bytesRead));
                     }
                     catch (Exception e) { Logger.LogInfo("ReceiveClient error: " + e.Message); }
                 }
                 else
                 {
                     Thread.Sleep(10);   // 沒連線時別空轉燒 CPU
+                }
+            }
+        }
+
+        private void ProcessPendingCommands()
+        {
+            while (pending_commands.TryDequeue(out string command))
+            {
+                try { HandleCommand(command); }
+                catch (Exception e) { Logger.LogInfo("command error: " + e.Message); }
+            }
+        }
+
+        private void HandleCommand(string receivedData)
+        {
+            string[] get = receivedData.Split(new[] { ':' }, 2);
+            if (!int.TryParse(get[0], out int way))
+            {
+                Logger.LogInfo("ReceiveClient invalid command.");
+                return;
+            }
+            if (way == 0)
+            {
+                if (Timeline.Timeline.isPlaying) { Timeline.Timeline.Pause(); }
+                else { Timeline.Timeline.Play(); }
+            }
+            else if (way == 1)
+            {
+                float settime = (float)0.1 * float.Parse(get[1]);
+                Timeline.Timeline.Seek(settime);
+            }
+            else if (way == 2)
+            {
+                string chara = get[1];
+                int rootStart = chara.IndexOf("chaF_");
+                if (rootStart == -1)
+                {
+                    rootStart = chara.IndexOf("chaM_");
+                    if (rootStart == -1)
+                    {
+                        Logger.LogInfo("cannot find chaF_ or chaM_");
+                        return;
+                    }
+                }
+
+                if (rootStart + 8 > chara.Length)
+                {
+                    Logger.LogInfo("chara data Error");
+                    return;
+                }
+                string chara_root = chara.Substring(rootStart, 8);
+
+                GameObject chara_object = GameObject.Find(chara_root);
+                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
+                if (guideObjectManager != null && chara_object != null)
+                {
+                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
+                    GuideObject chara_guideObject = dicGuideObject[chara_object.transform];
+                    GuideBase[] chara_guide = Traverse.Create(chara_guideObject).Field("guide").GetValue<GuideBase[]>();
+                    GuideSelect chara_guideSelect = chara_guide[11] as GuideSelect;
+                    chara_guideSelect.treeNodeObject.Select();
+                    chara_guideSelect = null;
+                }
+
+            }
+            else if (way == 3)
+            {
+                string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
+                int femaleRootStart = charas.IndexOf("chaF_");
+                if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
+                string femalechara_root = charas.Substring(femaleRootStart, 8);
+
+                int maleRootStart = charas.IndexOf("chaM_");
+                if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
+                string malechara_root = charas.Substring(maleRootStart, 8);
+                GameObject femalechara_object = GameObject.Find(femalechara_root);
+                GameObject malechara_object = GameObject.Find(malechara_root);
+                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
+                if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
+                {
+                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
+                    GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
+                    GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
+                    GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
+                    GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
+                    GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
+                    GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
+                    femalechara_guideSelect.treeNodeObject.SetVisible(true);
+                    malechara_guideSelect.treeNodeObject.SetVisible(true);
+                    femalechara_guideSelect = null;
+                    malechara_guideSelect = null;
+                }
+            }
+
+            else if (way == 4)
+            {
+                string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
+                int femaleRootStart = charas.IndexOf("chaF_");
+                if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
+                string femalechara_root = charas.Substring(femaleRootStart, 8);
+
+                int maleRootStart = charas.IndexOf("chaM_");
+                if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
+                string malechara_root = charas.Substring(maleRootStart, 8);
+                GameObject femalechara_object = GameObject.Find(femalechara_root);
+                GameObject malechara_object = GameObject.Find(malechara_root);
+                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
+                if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
+                {
+                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
+                    GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
+                    GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
+                    GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
+                    GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
+                    GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
+                    GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
+                    femalechara_guideSelect.treeNodeObject.SetVisible(false);
+                    malechara_guideSelect.treeNodeObject.SetVisible(false);
+                    femalechara_guideSelect = null;
+                    malechara_guideSelect = null;
+                }
+            }
+            else if (way == 5)
+            {
+                string profileKey = get.Length > 1 ? get[1] : "";
+                Logger.LogInfo("profile command 5 received: key=" + (string.IsNullOrEmpty(profileKey) ? "<none>" : profileKey));
+                // 沒載入場景就丟掉，不然請求會留著，存進使用者下一張載入的卡片
+                if (scene_path == "no")
+                    Logger.LogInfo("profile command 5 ignored: no scene is loaded");
+                else if (!TrySetCurrentProfileKey(profileKey))
+                    Logger.LogInfo("Invalid profile key received.");
+                else
+                {
+                    RequestProfileSave();
+                    Logger.LogInfo("profile command 5 accepted; card save queued");
                 }
             }
         }

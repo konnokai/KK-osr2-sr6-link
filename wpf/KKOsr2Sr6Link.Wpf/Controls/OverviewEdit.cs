@@ -97,13 +97,8 @@ public sealed class OverviewEdit : FrameworkElement
         }
 
         // value polyline (skip -1, connect to last valid)
-        for (int i = 1; i < Values.Count; i++)
-        {
-            if (Values[i] == -1) continue;
-            int index = i;
-            while (index - 1 >= 0 && Values[index - 1] == -1) index--;
-            dc.DrawLine(LinePen, new Point(X(index - 1), Y(Values[index - 1], h)), new Point(X(i), Y(Values[i], h)));
-        }
+        foreach (var (from, to) in ScripterOps.Segments(Values))
+            dc.DrawLine(LinePen, new Point(X(from), Y(Values[from], h)), new Point(X(to), Y(Values[to], h)));
 
         // horizontal reference lines
         dc.DrawLine(GridPen, new Point(_valueEdge + Pad, _valueEdge + Pad), new Point(w - Pad - _valueEdge, _valueEdge + Pad));

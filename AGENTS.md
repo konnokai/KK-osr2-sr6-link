@@ -49,12 +49,15 @@ One folder per component (file paths below are written relative to these):
 
 ## Communication contract
 
-- Plugin is the TCP **client**, Qt app is the TCP **server**. Default `127.0.0.1:8000` (configurable both sides; port clamped 0–9999).
+- Plugin is the TCP **client**, the Qt or WPF app is the TCP **server**. Default `127.0.0.1:8000` (configurable both sides; port clamped 0–9999).
 - 6 axes follow the OSR2/SR6 / TCode convention used throughout the codebase:
   - `L0` insert (stroke), `L1` surge, `L2` sway
   - `R0` twist, `R1` roll, `R2` pitch
   - These names appear everywhere as parallel sets of variables/lists (`L0s`, `silderL0`, `scripter3L0`, `config_L0`, …). Changes to one axis almost always need to be mirrored across all six.
 - Per "lovemaking mode" the plugin also tracks separate sample sets: default, `blowjob_*`, `breastsex_*`, `handjobL_*`, `handjobR_*` (see `Lovemaking_data` in `mainwindow.h`).
+- Plugin → app messages: `path|index|interval[|profileKey]` while a scene is loaded, and the bare word `clear` when the user clicks Init in Studio. The WPF app (`LinkServer.SceneCleared`) then drops its scene the same way a scene switch does: unsaved edits are discarded, and the outputs return to mid over 1 s. The Qt app has no special case: it treats `clear` as a new scene path, runs `list_clear()`, and returns before reading the other fields (`server_read`, mainwindow.cpp:869-891).
+- App → plugin commands: `0:` play/pause, `1:<index>` seek, `2:<chara>` select, `3:<girl>-<boy>` show, `4:<girl>-<boy>` hide, `5:<profileKey>` bind profile (empty key clears it).
+- There is no message delimiter in either direction; one socket read is assumed to be one message.
 
 ## Qt app structure
 
@@ -78,6 +81,8 @@ Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the she
 
 `OverviewEdit` / `ScripterEdit` size themselves from `Values`. `Values` can be empty (scene switch calls `ClearActions`), so width math must clamp at 0 — a negative `Size` throws during measure.
 
+In a curve, `-1` means "no point at this frame". Editor operations never turn the first or last frame into `-1`, but loaded files may already have `-1` there, so rendering must tolerate it (polylines come from `ScripterOps.Segments`). Assigning `ScripterEdit.Values` means a new list (scene switch, profile bind/create/fork): the setter clears selection, rebuild times and undo. Mouse edits that change values (Shift+left/right drag, Ctrl+right add/delete) snapshot on mouse-down and push undo on mouse-up. `OverviewEdit.Values` is the same `List` instance as axis 0's editor, so edits (including undo) must mutate the list in place, never swap the instance.
+
 **Localization** (`Localization/`) — runtime UI language switch, no restart:
 - Strings live in swappable `ResourceDictionary` files `Strings.<lang>.xaml` (`en`, `zh-Hant`). XAML binds them with `{DynamicResource L.*}` (static UI) / `{DynamicResource St.*}` (status messages); swapping the merged dictionary updates everything live.
 - `Loc.SetLanguage(lang)` swaps the dictionary; `Loc.T(key)` / `Loc.T(key, args)` resolve a string (or format one) from code. `MainWindow` aliases these as `L(...)`.
@@ -91,5 +96,6 @@ Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the she
 - The plugin uses old KKAPI/Timeline APIs required by Koikatu/BepInEx, but its project target is .NET Framework 4.8 — do not lower the target framework or upgrade references casually.
 - `Collect_data` samples by **programmatically seeking** the Timeline (`Timeline.Seek` one interval per `Update` frame), not by live user playback. The six axes are geometry between bone world positions, which only exist after the pose is evaluated — you can't derive them from Timeline keyframes alone.
 - Per-scan, bone `Transform`s are looked up **once** in `bone_cache` (keyed by the pair's `charas_name`, filled by `BuildBoneSet` in the `resampled` block). Don't reintroduce per-sample `GameObject.Find` in the sampling loop — it scans the whole scene 20×/sample/pair.
-- The `ReceiveClient` socket listener runs on a **background** thread, sleeps when disconnected, and treats `Receive` returning 0 as a close. Keep it from busy-waiting (no tight loop without `Thread.Sleep`).
+- The `ReceiveClient` socket listener runs on a **background** thread, sleeps when disconnected, and treats `Receive` returning 0 as a close. Keep it from busy-waiting (no tight loop without `Thread.Sleep`). It only enqueues received text into `pending_commands`; `Update()` drains the queue first thing each frame and runs `HandleCommand` on the main thread (commands call `Timeline.Play/Seek`, `GameObject.Find`, tree-node select/visibility).
+- A Studio scene Clear (KKAPI `SceneOperationKind.Clear`, fired only for `InitScene` outside a load/import) calls `ClearLoadedScene()`: `scene_path` goes back to `"no"` and any pending profile save is dropped, so a later `5:` command cannot overwrite the previously loaded card. When linked, it also sends `clear` to the app (see "Communication contract"). `Update()` also stops a running scan while `scene_path == "no"`, and a `5:` command that arrives with no scene loaded is ignored (it would otherwise save into whatever card is loaded next).
 - `scanning_mode` only ever takes the value 0; the "bisexual" buttons are unfinished and behave identically to "normal" (no `scanning_mode == 1` branch exists).

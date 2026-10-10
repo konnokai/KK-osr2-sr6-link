@@ -90,6 +90,7 @@
     <s:String x:Key="St.SceneNotFound">找不到場景檔案：{0}</s:String>
     <s:String x:Key="St.Loaded">已載入 {0}</s:String>
     <s:String x:Key="St.NoScene">尚未載入場景</s:String>
+    <s:String x:Key="St.SceneCleared">遊戲端已初始化場景，未儲存的編輯已捨棄</s:String>
     <s:String x:Key="St.SavedScripts">已儲存腳本</s:String>
     <s:String x:Key="St.SharedProfileSource">來源：共用：{0}</s:String>
     <s:String x:Key="St.SceneLocalSource">來源：場景本地</s:String>

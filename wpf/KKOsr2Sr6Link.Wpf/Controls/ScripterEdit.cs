@@ -35,7 +35,23 @@ public sealed class ScripterEdit : FrameworkElement
     private static readonly Brush PartBox = Freeze(Color.FromRgb(58, 65, 82));
     private static readonly Pen SplitPen = FreezePen(Color.FromArgb(255, 220, 220, 200), 3);
 
-    public List<int> Values { get; set; } = new() { 0, 500, 999 };
+    private List<int> _values = new() { 0, 500, 999 };
+
+    // 換場景會換掉整個 Values，舊的選取 index 和 undo 都屬於上一個場景，留著會越界或還原錯資料
+    public List<int> Values
+    {
+        get => _values;
+        set
+        {
+            _values = value;
+            _selected.Clear(); _selectedTimes.Clear(); _rebuildTimes.Clear(); _undo.Clear();
+            _oldValues = new List<int>(value);
+            _oldSelected = new List<int>();
+            _gestureSnapshot = null;
+            _rebuild = false;
+            _moveFirst = true;
+        }
+    }
     public int SelectedLine { get; set; }
     public int Intervals { get; private set; } = 100;
 
@@ -51,6 +67,8 @@ public sealed class ScripterEdit : FrameworkElement
     private readonly List<List<int>> _undo = new();
     private List<int> _oldValues = new();
     private List<int> _oldSelected = new();
+    // 會改值的滑鼠手勢在按下時存快照，放開時才收 undo，不管那時修飾鍵是否已先放開
+    private List<int>? _gestureSnapshot;
     private List<int> _copyValues = new();
     private List<int> _copyIndexs = new();
 
@@ -136,15 +154,12 @@ public sealed class ScripterEdit : FrameworkElement
         }
 
         // value polyline + selected segments
-        for (int i = 1; i < Values.Count; i++)
+        foreach (var (from, to) in ScripterOps.Segments(Values))
         {
-            if (Values[i] == -1) continue;
-            int index = i;
-            while (index - 1 >= 0 && Values[index - 1] == -1) index--;
-            var a = new Point(X(index - 1), Y(Values[index - 1]));
-            var b = new Point(X(i), Y(Values[i]));
+            var a = new Point(X(from), Y(Values[from]));
+            var b = new Point(X(to), Y(Values[to]));
             dc.DrawLine(LinePen, a, b);
-            if (_selected.Contains(i) && _selected.Contains(index - 1))
+            if (_selected.Contains(to) && _selected.Contains(from))
                 dc.DrawLine(SelSegPen, a, b);
         }
 
@@ -233,6 +248,7 @@ public sealed class ScripterEdit : FrameworkElement
                 if (HitColumn(i, _press.X) && !_selectedTimes.Contains(i)) _selectedTimes.Add(i);
             }
             _oldValues = new List<int>(Values);
+            _gestureSnapshot = new List<int>(Values); // 拖曳中途按 Shift 就會改值
         }
         else if (e.ChangedButton == MouseButton.Left && ctrl && !shift && !alt)
         {
@@ -249,6 +265,7 @@ public sealed class ScripterEdit : FrameworkElement
             _mouse1 = true; CaptureMouse();
             _press = _move = e.GetPosition(this);
             _oldValues = new List<int>(Values);
+            _gestureSnapshot = new List<int>(Values);
         }
         else if (e.ChangedButton == MouseButton.Middle)
         {
@@ -266,11 +283,13 @@ public sealed class ScripterEdit : FrameworkElement
             _press = _move = e.GetPosition(this);
             _oldValues = new List<int>(Values);
             _oldSelected = new List<int>(_selected);
+            _gestureSnapshot = new List<int>(Values);
         }
         else if (e.ChangedButton == MouseButton.Right && ctrl && !shift && !alt)
         {
             _mouse2 = true; CaptureMouse();
             _press = _move = e.GetPosition(this);
+            _gestureSnapshot = new List<int>(Values);
             var p = e.GetPosition(this);
             for (int i = 0; i < Values.Count; i++)
             {
@@ -280,7 +299,7 @@ public sealed class ScripterEdit : FrameworkElement
                     int value = (int)((p.Y - ActualHeight + _valueEdge + Pad) / ((ActualHeight - _valueEdge * 2 - Pad * 2) / -999.0));
                     if (value >= 0 && value <= 999) Values[i] = value;
                 }
-                else
+                else if (i != 0 && i != Values.Count - 1)
                 {
                     double y = Y(Values[i]);
                     if (y - _valueEdge < p.Y && p.Y < y + _valueEdge) Values[i] = -1;
@@ -384,8 +403,8 @@ public sealed class ScripterEdit : FrameworkElement
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         _press = _move = e.GetPosition(this);
-        bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
-        if (_mouse1 && shift && !_oldValues.SequenceEqual(Values)) PushUndo(_oldValues);
+        if (_gestureSnapshot != null && !_gestureSnapshot.SequenceEqual(Values)) PushUndo(_gestureSnapshot);
+        _gestureSnapshot = null;
         _mouse1 = _mouse2 = _mouse3 = false;
         if (IsMouseCaptured) ReleaseMouseCapture();
         InvalidateVisual();
@@ -415,18 +434,19 @@ public sealed class ScripterEdit : FrameworkElement
         else if (ctrl && e.Key == Key.X) DoCut();
         else if (ctrl && e.Key == Key.V) DoPaste();
         else if (ctrl && e.Key == Key.Z) DoUndo();
-        else if (ctrl && e.Key == Key.PageUp) { BeginMove(); DoAmplify(1.1); }
-        else if (ctrl && e.Key == Key.PageDown) { BeginMove(); DoAmplify(0.9); }
+        else if (ctrl && e.Key == Key.PageUp) DoAmplify(1.1);
+        else if (ctrl && e.Key == Key.PageDown) DoAmplify(0.9);
         else if (e.Key == Key.Space) SetPlay?.Invoke();
         else if (e.Key == Key.LeftAlt || e.Key == Key.RightAlt) ToggleRebuild();
         else return;
         e.Handled = true;
     }
 
+    // 只有 Shift+方向鍵按住連續移動，放開時才收一筆 undo。其他操作自己會存，這裡再存會多出舊快照
     protected override void OnKeyUp(KeyEventArgs e)
     {
-        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown)
-            _moveFirst = true;
+        if (_moveFirst || e.Key is not (Key.Up or Key.Down or Key.Left or Key.Right)) return;
+        _moveFirst = true;
         if (!_oldValues.SequenceEqual(Values)) PushUndo(_oldValues);
     }
 
@@ -441,11 +461,11 @@ public sealed class ScripterEdit : FrameworkElement
     private void MoveSelected(int delta)
     {
         _moveIndex = delta; _lastMoveIndex = delta;
+        if (!ScripterOps.CanMoveInterior(Values.Count, _selected, delta)) return;
         var now = new List<int>();
         foreach (var s in _selected)
         {
             int ni = s + delta;
-            if (ni <= 0 || ni >= Values.Count - 1) return;
             now.Add(ni);
             Values[ni] = Values[s];
             Values[s] = -1;
@@ -469,7 +489,7 @@ public sealed class ScripterEdit : FrameworkElement
 
     // ---------- operations (shared by menu + keyboard) ----------
 
-    private void DoSelectAll() { var (sv, st) = ScripterOps.SelectAll(Values); _selected.Clear(); _selected.AddRange(sv); _selectedTimes.Clear(); _selectedTimes.AddRange(st); InvalidateVisual(); }
+    internal void DoSelectAll() { var (sv, st) = ScripterOps.SelectAll(Values); _selected.Clear(); _selected.AddRange(sv); _selectedTimes.Clear(); _selectedTimes.AddRange(st); InvalidateVisual(); }
     private void DoSelectPeaks() { Clean(); var r = ScripterOps.SelectPeaks(Values, _selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
     private void DoSelectValleys() { Clean(); var r = ScripterOps.SelectValleys(Values, _selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
     private void DoSelectMidpoints() { Clean(); var r = ScripterOps.SelectMidpoints(Values, _selected); _selected.Clear(); _selected.AddRange(r); InvalidateVisual(); }
@@ -485,7 +505,7 @@ public sealed class ScripterEdit : FrameworkElement
         InvalidateVisual();
     }
 
-    private void DoDelete() { var snap = new List<int>(Values); ScripterOps.DeleteSelected(Values, _selected); if (!snap.SequenceEqual(Values)) PushUndo(snap); _selected.Clear(); InvalidateVisual(); }
+    internal void DoDelete() { var snap = new List<int>(Values); ScripterOps.DeleteSelected(Values, _selected); if (!snap.SequenceEqual(Values)) PushUndo(snap); _selected.Clear(); InvalidateVisual(); }
     private void DoAddLines() { var snap = new List<int>(Values); ScripterOps.AddSelectedLines(Values, _selectedTimes); if (!snap.SequenceEqual(Values)) PushUndo(snap); InvalidateVisual(); }
     private void DoChangeValues() { if (!int.TryParse(_valueBox.Text, out var v)) return; var snap = new List<int>(Values); ScripterOps.ChangeValues(Values, _selected, v); if (!snap.SequenceEqual(Values)) PushUndo(snap); InvalidateVisual(); }
     private void DoAmplify(double f) { Clean(); var snap = new List<int>(Values); ScripterOps.Amplify(Values, _selected, f); if (!snap.SequenceEqual(Values)) PushUndo(snap); InvalidateVisual(); }
@@ -503,7 +523,15 @@ public sealed class ScripterEdit : FrameworkElement
     private void DoCopy() { Clean(); (_copyValues, _copyIndexs) = ScripterOps.Copy(Values, _selected); GetCopyValues?.Invoke(_copyValues, _copyIndexs); }
     private void DoCut() { Clean(); (_copyValues, _copyIndexs) = ScripterOps.Copy(Values, _selected); GetCopyValues?.Invoke(_copyValues, _copyIndexs); var snap = new List<int>(Values); ScripterOps.DeleteSelected(Values, _selected); PushUndo(snap); InvalidateVisual(); }
     private void DoPaste() { var snap = new List<int>(Values); ScripterOps.Paste(Values, SelectedLine, _copyValues, _copyIndexs); if (!snap.SequenceEqual(Values)) PushUndo(snap); InvalidateVisual(); }
-    private void DoUndo() { if (_undo.Count < 1) return; Values = _undo[^1]; _undo.RemoveAt(_undo.Count - 1); Refresh(); }
+    // 原地覆寫：OverviewEdit 跟第一軸共用同一個 List，換實例的話總覽會停在舊曲線
+    internal void DoUndo()
+    {
+        if (_undo.Count < 1) return;
+        var snap = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
+        Values.Clear(); Values.AddRange(snap);
+        Refresh();
+    }
     private void DoRebuild() { RebuildTimes?.Invoke(new List<int>(_rebuildTimes)); _rebuild = false; _rebuildTimes.Clear(); InvalidateVisual(); }
 
     private void Clean() => ScripterOps.CleanAndSort(Values, _selected);

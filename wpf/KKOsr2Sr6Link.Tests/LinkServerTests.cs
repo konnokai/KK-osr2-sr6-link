@@ -21,6 +21,7 @@ public class LinkServerTests
         Assert.Equal("shared-v1", shared.ProfileKey);
 
         Assert.False(LinkServer.TryParse("incomplete", out _));
+        Assert.False(LinkServer.TryParse(LinkServer.ClearMessage, out _));
         Assert.False(LinkServer.TryParse("", out _));
     }
 
@@ -74,6 +75,25 @@ public class LinkServerTests
         Assert.True(gotEvent.Wait(TimeSpan.FromSeconds(2)));
         Assert.Equal("scene.txt", got!.Value.Path);
         Assert.Equal(7, got.Value.Index);
+    }
+
+    [Fact]
+    public void Loopback_ClearMessage_RaisesSceneClearedOnly()
+    {
+        using var server = new LinkServer();
+        using var cleared = new ManualResetEventSlim();
+        bool gotScene = false;
+        server.SceneCleared += () => cleared.Set();
+        server.MessageReceived += _ => gotScene = true;
+        server.Start("127.0.0.1", 0);
+
+        using var client = new TcpClient();
+        client.Connect("127.0.0.1", server.ListeningPort);
+        var bytes = Encoding.UTF8.GetBytes(LinkServer.ClearMessage);
+        client.GetStream().Write(bytes, 0, bytes.Length);
+
+        Assert.True(cleared.Wait(TimeSpan.FromSeconds(2)));
+        Assert.False(gotScene);
     }
 
     private static void WaitFor(Func<bool> cond)

@@ -22,6 +22,9 @@ public sealed class LinkServer : IDisposable
 {
     public const int ThrottleMs = 200;
 
+    /// <summary>Sent by the plugin when the user clicks Init in Studio (KKAPI SceneOperationKind.Clear).</summary>
+    public const string ClearMessage = "clear";
+
     private readonly Func<long> _clock;
     private readonly object _sendLock = new();
     private TcpListener? _listener;
@@ -34,6 +37,7 @@ public sealed class LinkServer : IDisposable
     public string ClientAddress { get; private set; } = "";
 
     public event Action<SceneMessage>? MessageReceived;
+    public event Action? SceneCleared;
     public event Action? ClientConnected;
     public event Action? ClientDisconnected;
 
@@ -80,7 +84,9 @@ public sealed class LinkServer : IDisposable
                 int read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false);
                 if (read <= 0) break;
                 var data = Encoding.UTF8.GetString(buffer, 0, read);
-                if (TryParse(data, out var msg))
+                if (data == ClearMessage)
+                    SceneCleared?.Invoke();
+                else if (TryParse(data, out var msg))
                     MessageReceived?.Invoke(msg);
             }
         }
