@@ -220,20 +220,27 @@ public static class ScripterOps
         return r;
     }
 
-    /// <summary>Move selected points horizontally by delta, blanking the originals. Returns new selection,
-    /// or null (values untouched) when a source is an endpoint or a target leaves the interior.</summary>
-    public static List<int>? MoveHorizontal(List<int> values, List<int> oldValues, List<int> selected, List<int> oldSelected, int delta)
+    /// <summary>Drag move: rebuild <paramref name="values"/> in place from the press-time snapshot, then shift
+    /// <paramref name="oldSelected"/> by delta (total offset since the press). Returns the new selection, or
+    /// null (values untouched) when a source is an endpoint or a target leaves the interior.</summary>
+    public static List<int>? MoveHorizontal(List<int> values, List<int> oldValues, List<int> oldSelected, int delta)
     {
         if (!CanMoveInterior(values.Count, oldSelected, delta)) return null;
-        var now = new List<int>();
-        for (int i = 0; i < oldSelected.Count; i++)
-        {
-            int ni = oldSelected[i] + delta;
-            now.Add(ni);
-            values[ni] = oldValues[oldSelected[i]];
-            if (i < selected.Count) values[selected[i]] = -1;
-        }
-        return now.Distinct().ToList();
+        // 每次都從按下時的快照重算，拖過去又拖回來時，中途蓋掉的點會還原
+        for (int i = 0; i < values.Count; i++) values[i] = oldValues[i];
+        return ShiftHorizontal(values, oldSelected, delta);
+    }
+
+    /// <summary>Shift selected points by delta, blanking the sources. Returns the new selection, or null
+    /// (values untouched) when a source is an endpoint or a target leaves the interior.</summary>
+    public static List<int>? ShiftHorizontal(List<int> values, List<int> selected, int delta)
+    {
+        if (!CanMoveInterior(values.Count, selected, delta)) return null;
+        // 先讀完全部來源再寫，相鄰的點才不會被前一個點的寫入蓋掉
+        var moved = selected.Distinct().Select(s => (to: s + delta, value: values[s])).ToList();
+        foreach (var s in selected) values[s] = -1;
+        foreach (var (to, value) in moved) values[to] = value;
+        return moved.Select(m => m.to).ToList();
     }
 
     // 編輯不能把頭尾兩格清成 -1，跟 DeleteSelected 一樣。整批先檢查，不然移到一半才越界，資料只會改掉一半

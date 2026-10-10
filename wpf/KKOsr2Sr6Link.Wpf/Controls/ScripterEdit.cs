@@ -153,13 +153,19 @@ public sealed class ScripterEdit : FrameworkElement
                     Intervals * (SplitLines[idx + 1] - SelectedPart), h - 2 * Pad));
         }
 
+        // 長場景全選後，每一格都呼叫 List.Contains，成本隨長度平方成長，拖曳會卡
+        var selected = new HashSet<int>(_selected);
+        var selectedTimes = new HashSet<int>(_selectedTimes);
+        var rebuildTimes = new HashSet<int>(_rebuildTimes);
+        var splitLines = new HashSet<int>(SplitLines);
+
         // value polyline + selected segments
         foreach (var (from, to) in ScripterOps.Segments(Values))
         {
             var a = new Point(X(from), Y(Values[from]));
             var b = new Point(X(to), Y(Values[to]));
             dc.DrawLine(LinePen, a, b);
-            if (_selected.Contains(to) && _selected.Contains(from))
+            if (selected.Contains(to) && selected.Contains(from))
                 dc.DrawLine(SelSegPen, a, b);
         }
 
@@ -178,9 +184,9 @@ public sealed class ScripterEdit : FrameworkElement
         for (int i = 0; i < Values.Count; i++)
         {
             int x = X(i);
-            Pen grid = _rebuildTimes.Contains(i) ? GridRebuild : _selectedTimes.Contains(i) ? GridFull : GridDim;
+            Pen grid = rebuildTimes.Contains(i) ? GridRebuild : selectedTimes.Contains(i) ? GridFull : GridDim;
             dc.DrawLine(grid, new Point(x, _valueEdge + Pad), new Point(x, h - Pad - _valueEdge));
-            if (SplitLines.Contains(i)) dc.DrawLine(SplitPen, new Point(x, 0), new Point(x, h));
+            if (splitLines.Contains(i)) dc.DrawLine(SplitPen, new Point(x, 0), new Point(x, h));
 
             if ((i == 0 || i == Values.Count - 1 || i % 5 == 0) && Intervals >= 30)
             {
@@ -192,7 +198,7 @@ public sealed class ScripterEdit : FrameworkElement
             }
 
             if (Values[i] == -1) continue;
-            var brush = _selected.Contains(i) ? SelDot : Dot;
+            var brush = selected.Contains(i) ? SelDot : Dot;
             dc.DrawEllipse(brush, null, new Point(x, Y(Values[i])), _valueEdge, _valueEdge);
         }
 
@@ -284,6 +290,7 @@ public sealed class ScripterEdit : FrameworkElement
             _oldValues = new List<int>(Values);
             _oldSelected = new List<int>(_selected);
             _gestureSnapshot = new List<int>(Values);
+            _lastMoveIndex = 0;
         }
         else if (e.ChangedButton == MouseButton.Right && ctrl && !shift && !alt)
         {
@@ -353,9 +360,9 @@ public sealed class ScripterEdit : FrameworkElement
             {
                 if (!HitColumn(i, p.X)) continue;
                 _moveIndex = (int)((p.X - _press.X) / Intervals);
-                if (_moveIndex == 0 || _lastMoveIndex == _moveIndex) return;
+                if (_lastMoveIndex == _moveIndex) return;
                 _lastMoveIndex = _moveIndex;
-                var res = ScripterOps.MoveHorizontal(Values, _oldValues, _selected, _oldSelected, _moveIndex);
+                var res = ScripterOps.MoveHorizontal(Values, _oldValues, _oldSelected, _moveIndex);
                 if (res != null) { _selected.Clear(); _selected.AddRange(res); }
                 InvalidateVisual(); return;
             }
@@ -416,28 +423,30 @@ public sealed class ScripterEdit : FrameworkElement
     {
         bool ctrl = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
+        // WPF 按著 Alt 時 e.Key 是 Key.System，真正的鍵在 SystemKey
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
 
-        if (shift && e.Key == Key.Up) { BeginMove(); ScripterOps.ShiftValue(Values, _selected, 10); InvalidateVisual(); }
-        else if (shift && e.Key == Key.Down) { BeginMove(); ScripterOps.ShiftValue(Values, _selected, -10); InvalidateVisual(); }
-        else if (shift && e.Key == Key.Left) { BeginMove(); MoveSelected(-1); }
-        else if (shift && e.Key == Key.Right) { BeginMove(); MoveSelected(1); }
-        else if (ctrl && e.Key == Key.Left) ZoomOut();
-        else if (ctrl && e.Key == Key.Right) ZoomIn();
-        else if (ctrl && e.Key == Key.A) DoSelectAll();
-        else if (ctrl && e.Key == Key.F) DoRemoveDuplicateStacks();
-        else if (ctrl && e.Key == Key.D) DoDelete();
-        else if (ctrl && e.Key == Key.E) DoAddLines();
-        else if (ctrl && e.Key == Key.D1) DoSelectPeaks();
-        else if (ctrl && e.Key == Key.D2) DoSelectMidpoints();
-        else if (ctrl && e.Key == Key.D3) DoSelectValleys();
-        else if (ctrl && e.Key == Key.C) DoCopy();
-        else if (ctrl && e.Key == Key.X) DoCut();
-        else if (ctrl && e.Key == Key.V) DoPaste();
-        else if (ctrl && e.Key == Key.Z) DoUndo();
-        else if (ctrl && e.Key == Key.PageUp) DoAmplify(1.1);
-        else if (ctrl && e.Key == Key.PageDown) DoAmplify(0.9);
-        else if (e.Key == Key.Space) SetPlay?.Invoke();
-        else if (e.Key == Key.LeftAlt || e.Key == Key.RightAlt) ToggleRebuild();
+        if (shift && key == Key.Up) { BeginMove(); ScripterOps.ShiftValue(Values, _selected, 10); InvalidateVisual(); }
+        else if (shift && key == Key.Down) { BeginMove(); ScripterOps.ShiftValue(Values, _selected, -10); InvalidateVisual(); }
+        else if (shift && key == Key.Left) { BeginMove(); MoveSelected(-1); }
+        else if (shift && key == Key.Right) { BeginMove(); MoveSelected(1); }
+        else if (ctrl && key == Key.Left) ZoomOut();
+        else if (ctrl && key == Key.Right) ZoomIn();
+        else if (ctrl && key == Key.A) DoSelectAll();
+        else if (ctrl && key == Key.F) DoRemoveDuplicateStacks();
+        else if (ctrl && key == Key.D) DoDelete();
+        else if (ctrl && key == Key.E) DoAddLines();
+        else if (ctrl && key == Key.D1) DoSelectPeaks();
+        else if (ctrl && key == Key.D2) DoSelectMidpoints();
+        else if (ctrl && key == Key.D3) DoSelectValleys();
+        else if (ctrl && key == Key.C) DoCopy();
+        else if (ctrl && key == Key.X) DoCut();
+        else if (ctrl && key == Key.V) DoPaste();
+        else if (ctrl && key == Key.Z) DoUndo();
+        else if (ctrl && key == Key.PageUp) DoAmplify(1.1);
+        else if (ctrl && key == Key.PageDown) DoAmplify(0.9);
+        else if (key == Key.Space) SetPlay?.Invoke();
+        else if (key is Key.LeftAlt or Key.RightAlt) { if (!e.IsRepeat) ToggleRebuild(); } // 按住 Alt 會一直重複觸發，只切換一次
         else return;
         e.Handled = true;
     }
@@ -445,7 +454,8 @@ public sealed class ScripterEdit : FrameworkElement
     // 只有 Shift+方向鍵按住連續移動，放開時才收一筆 undo。其他操作自己會存，這裡再存會多出舊快照
     protected override void OnKeyUp(KeyEventArgs e)
     {
-        if (_moveFirst || e.Key is not (Key.Up or Key.Down or Key.Left or Key.Right)) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (_moveFirst || key is not (Key.Up or Key.Down or Key.Left or Key.Right)) return;
         _moveFirst = true;
         if (!_oldValues.SequenceEqual(Values)) PushUndo(_oldValues);
     }
@@ -460,17 +470,9 @@ public sealed class ScripterEdit : FrameworkElement
 
     private void MoveSelected(int delta)
     {
-        _moveIndex = delta; _lastMoveIndex = delta;
-        if (!ScripterOps.CanMoveInterior(Values.Count, _selected, delta)) return;
-        var now = new List<int>();
-        foreach (var s in _selected)
-        {
-            int ni = s + delta;
-            now.Add(ni);
-            Values[ni] = Values[s];
-            Values[s] = -1;
-        }
-        _selected.Clear(); _selected.AddRange(now.Distinct());
+        var now = ScripterOps.ShiftHorizontal(Values, _selected, delta);
+        if (now == null) return;
+        _selected.Clear(); _selected.AddRange(now);
         InvalidateVisual();
     }
 

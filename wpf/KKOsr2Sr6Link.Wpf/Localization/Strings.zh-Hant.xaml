@@ -110,6 +110,7 @@
     <s:String x:Key="St.RawUnavailable">找不到場景原始資料；已停用重建功能</s:String>
     <s:String x:Key="St.ProfileListFailed">profile 清單失敗：{0}</s:String>
     <s:String x:Key="St.ProfileUnbound">已解除 profile 綁定</s:String>
+    <s:String x:Key="St.UnbindNeedsPlugin">plugin 未連線。要先連上 plugin 才能解除綁定，場景卡片才會跟著更新</s:String>
     <s:String x:Key="St.PlaybackIndexOutOfRange">播放索引 {0} 超出目前 action 範圍</s:String>
     <s:String x:Key="St.SaveFailed">儲存失敗：{0}</s:String>
     <s:String x:Key="St.ExportedFunscripts">已匯出 6 個 funscript</s:String>

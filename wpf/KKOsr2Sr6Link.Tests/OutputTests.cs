@@ -74,4 +74,25 @@ public class ButtplugClientTests
         client.HandleMessage("""[{"DeviceAdded":{"DeviceIndex":1,"DeviceName":"A again","DeviceMessages":{"LinearCmd":{"FeatureCount":1}}}}]""");
         Assert.Single(client.Devices);
     }
+
+    [Fact]
+    public void HandleMessage_WrongFieldType_ReportsErrorInsteadOfThrowing()
+    {
+        var client = new ButtplugClient();
+        string? error = null;
+        client.Error += e => error = e;
+        client.HandleMessage("""[{"DeviceAdded":{"DeviceIndex":"one","DeviceName":"A","DeviceMessages":{}}}]""");
+        Assert.NotNull(error);
+        Assert.Empty(client.Devices);
+    }
+
+    [Fact]
+    public void Devices_IsSnapshot_NotMutatedByLaterMessages()
+    {
+        var client = new ButtplugClient();
+        var before = client.Devices;
+        client.HandleMessage("""[{"DeviceAdded":{"DeviceIndex":1,"DeviceName":"A","DeviceMessages":{"LinearCmd":{"FeatureCount":1}}}}]""");
+        Assert.Empty(before);
+        Assert.Single(client.Devices);
+    }
 }

@@ -23,6 +23,14 @@ public class PlaybackEngineTests
     }
 
     [Fact]
+    public void SleepUsesSceneInterval()
+    {
+        var e = WithL0(0, -1, 500);
+        e.IntervalMs = 200;
+        Assert.Equal(400, e.ComputeCommands(index: 0).Single(c => c.Axis == Axis.L0).SleepMs);
+    }
+
+    [Fact]
     public void SkipsMinusOne_Sentinels()
     {
         var e = WithL0(0, -1, -1, 500);

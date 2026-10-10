@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -14,7 +15,8 @@ public readonly record struct SceneMessage(string Path, int Index, double Sleep,
 
 /// <summary>
 /// TCP server side of the plugin link (the plugin is the client). Listens on ip:port, decodes
-/// "&lt;path&gt;|&lt;index&gt;|&lt;sleep&gt;" messages, and sends colon-prefixed commands back, throttled to
+/// "&lt;path&gt;|&lt;index&gt;|&lt;sleep&gt;" messages, and sends colon-prefixed commands back (every message in
+/// both directions ends with '\n'), throttled to
 /// one write per 200 ms (the original allowriter/writerTimer behaviour). Mirrors mainwindow.cpp
 /// new_connected/server_read and the set_play/setplaytime writes.
 /// </summary>
@@ -77,17 +79,24 @@ public sealed class LinkServer : IDisposable
     private async Task ReadLoopAsync(TcpClient client, NetworkStream stream, CancellationToken ct)
     {
         var buffer = new byte[8192];
+        var chars = new char[Encoding.UTF8.GetMaxCharCount(buffer.Length)];
+        // 一次 read 可能有好幾則訊息，也可能只有半則，連中文字的 UTF-8 位元組都可能被切開
+        var decoder = Encoding.UTF8.GetDecoder();
+        var pending = new StringBuilder();
         try
         {
             while (!ct.IsCancellationRequested)
             {
                 int read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false);
                 if (read <= 0) break;
-                var data = Encoding.UTF8.GetString(buffer, 0, read);
-                if (data == ClearMessage)
-                    SceneCleared?.Invoke();
-                else if (TryParse(data, out var msg))
-                    MessageReceived?.Invoke(msg);
+                pending.Append(chars, 0, decoder.GetChars(buffer, 0, read, chars, 0));
+                foreach (var line in TakeLines(pending))
+                {
+                    if (line == ClearMessage)
+                        SceneCleared?.Invoke();
+                    else if (TryParse(line, out var msg))
+                        MessageReceived?.Invoke(msg);
+                }
             }
         }
         catch (OperationCanceledException) { }
@@ -98,6 +107,22 @@ public sealed class LinkServer : IDisposable
             if (ReferenceEquals(_client, client)) { _client = null; _stream = null; }
             ClientDisconnected?.Invoke();
         }
+    }
+
+    /// <summary>Remove every complete '\n'-terminated line from <paramref name="pending"/>; the unfinished tail stays.</summary>
+    private static List<string> TakeLines(StringBuilder pending)
+    {
+        var lines = new List<string>();
+        var text = pending.ToString();
+        int start = 0, end;
+        while ((end = text.IndexOf('\n', start)) >= 0)
+        {
+            var line = text[start..end].TrimEnd('\r');
+            if (line.Length > 0) lines.Add(line);
+            start = end + 1;
+        }
+        pending.Remove(0, start);
+        return lines;
     }
 
     /// <summary>Decode the legacy three fields and the optional fourth profile key.</summary>
@@ -139,7 +164,7 @@ public sealed class LinkServer : IDisposable
             if (now < _nextAllowed) return false;
             try
             {
-                var bytes = Encoding.UTF8.GetBytes(message);
+                var bytes = Encoding.UTF8.GetBytes(message + "\n");
                 stream.Write(bytes, 0, bytes.Length);
                 stream.Flush();
             }
@@ -158,7 +183,7 @@ public sealed class LinkServer : IDisposable
             if (stream == null || _client?.Connected != true) return false;
             try
             {
-                var bytes = Encoding.UTF8.GetBytes(message);
+                var bytes = Encoding.UTF8.GetBytes(message + "\n");
                 stream.Write(bytes, 0, bytes.Length);
                 stream.Flush();
                 return true;

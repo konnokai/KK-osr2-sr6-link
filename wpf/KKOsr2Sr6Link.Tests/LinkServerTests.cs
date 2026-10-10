@@ -69,12 +69,59 @@ public class LinkServerTests
 
         using var client = new TcpClient();
         client.Connect("127.0.0.1", port);
-        var bytes = Encoding.UTF8.GetBytes("scene.txt|7|0.1");
+        var bytes = Encoding.UTF8.GetBytes("scene.txt|7|0.1\n");
         client.GetStream().Write(bytes, 0, bytes.Length);
 
         Assert.True(gotEvent.Wait(TimeSpan.FromSeconds(2)));
         Assert.Equal("scene.txt", got!.Value.Path);
         Assert.Equal(7, got.Value.Index);
+    }
+
+    [Fact]
+    public void Loopback_SplitsMessagesOnNewline()
+    {
+        using var server = new LinkServer();
+        var got = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        int clears = 0;
+        using var done = new ManualResetEventSlim();
+        server.MessageReceived += m => { got.Enqueue(m.Path + "#" + m.Index); if (got.Count == 3) done.Set(); };
+        server.SceneCleared += () => Interlocked.Increment(ref clears);
+        server.Start("127.0.0.1", 0);
+
+        using var client = new TcpClient();
+        client.Connect("127.0.0.1", server.ListeningPort);
+        var stream = client.GetStream();
+        // 前三則黏在同一次寫入，最後一則的中文字從 UTF-8 位元組中間切開
+        var bytes = Encoding.UTF8.GetBytes("a.txt|1|0.1\nclear\nb.txt|2|0.1\n場景.txt|3|0.1\n");
+        int cut = Encoding.UTF8.GetByteCount("a.txt|1|0.1\nclear\nb.txt|2|0.1\n場") - 1;
+        stream.Write(bytes, 0, cut);
+        stream.Flush();
+        Thread.Sleep(100);
+        stream.Write(bytes, cut, bytes.Length - cut);
+
+        Assert.True(done.Wait(TimeSpan.FromSeconds(2)));
+        Assert.Equal(new[] { "a.txt#1", "b.txt#2", "場景.txt#3" }, got.ToArray());
+        Assert.Equal(1, clears);
+    }
+
+    [Fact]
+    public void Commands_EndWithNewline()
+    {
+        using var server = new LinkServer();
+        server.Start("127.0.0.1", 0);
+        using var client = new TcpClient();
+        client.Connect("127.0.0.1", server.ListeningPort);
+        WaitFor(() => server.IsConnected);
+
+        Assert.True(server.SendPlay());
+        Assert.True(server.SendProfileBinding(""));
+        var expected = "0:\n5:\n";
+        var buffer = new byte[64];
+        var text = "";
+        client.ReceiveTimeout = 2000;
+        while (text.Length < expected.Length)
+            text += Encoding.UTF8.GetString(buffer, 0, client.GetStream().Read(buffer, 0, buffer.Length));
+        Assert.Equal(expected, text);
     }
 
     [Fact]
@@ -89,7 +136,7 @@ public class LinkServerTests
 
         using var client = new TcpClient();
         client.Connect("127.0.0.1", server.ListeningPort);
-        var bytes = Encoding.UTF8.GetBytes(LinkServer.ClearMessage);
+        var bytes = Encoding.UTF8.GetBytes(LinkServer.ClearMessage + "\n");
         client.GetStream().Write(bytes, 0, bytes.Length);
 
         Assert.True(cleared.Wait(TimeSpan.FromSeconds(2)));

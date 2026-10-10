@@ -240,8 +240,9 @@ namespace KK_osr2_sr6_link
                     catch
                     {
                         link = false;
-                        Logger.LogInfo($"link server {serverIP.ToString()}:{port} false,try to relink in {link_interval_time.ToString()}ms");
-                        clientSocket.Close();
+                        // IP 填錯時 IPAddress.Parse 會丟例外，serverIP 還是 null，不能拿來寫 log
+                        Logger.LogInfo($"link server {server_ip.Value}:{server_port.Value} false,try to relink in {link_interval_time.ToString()}ms");
+                        try { clientSocket?.Close(); } catch { }
                     }
                 }
             }
@@ -290,8 +291,8 @@ namespace KK_osr2_sr6_link
                     catch
                     {
                         link = false;
-                        Logger.LogInfo($"link server {serverIP.ToString()}:{port} false");
-                        clientSocket.Close();
+                        Logger.LogInfo($"link server {server_ip.Value}:{server_port.Value} false");
+                        try { clientSocket?.Close(); } catch { }
                     }
                 }
             }
@@ -346,6 +347,11 @@ namespace KK_osr2_sr6_link
             if (start_sampled)
             {
                 GUILayout.Label($"掃描中 {Timeline.Timeline.playbackTime:F1}/{Timeline.Timeline.duration:F1} — 請勿手動拖動時間軸");
+                if (GUILayout.Button("stop sampling"))
+                {
+                    StopSampling();
+                    Logger.LogInfo("sampling stopped by user");
+                }
             }
             GUILayout.EndVertical();
         }
@@ -419,7 +425,8 @@ namespace KK_osr2_sr6_link
         private static void SendSceneMessage(string message)
         {
             if (!link || clientSocket == null) return;
-            byte[] data = Encoding.UTF8.GetBytes(message);
+            // 每則訊息以換行結尾，WPF 端靠它切開黏在一起的訊息
+            byte[] data = Encoding.UTF8.GetBytes(message + "\n");
             try { clientSocket.Send(data); }
             catch
             {
@@ -724,7 +731,14 @@ namespace KK_osr2_sr6_link
                 Setting_range();
                 if (start_sampled)
                 {
-                    Collect_data();
+                    try { Collect_data(); }
+                    catch (Exception e)
+                    {
+                        // 不停下來的話每一格都會丟同一個例外，掃描永遠不會結束
+                        StopSampling();
+                        Logger.LogError("sampling failed: " + e);
+                        ShowMessage("Sampling failed and was stopped; the previous data was kept. See log for details.");
+                    }
                 }
                 else
                 {
@@ -754,12 +768,23 @@ namespace KK_osr2_sr6_link
             }
         }
 
+        private string SampleFilePath()
+        {
+            string target_path = scene_path.Replace("/UserData/studio/scene/", "").Replace(".png", "").Replace(currentDirectory, "").Replace("/CharaStudio_Data/..", "");
+            return (currentDirectory + "/UserData/KK_osr_sr6_link/" + target_path + ".txt").Replace("/UserData//studio/scene/", "");
+        }
+
+        /// <summary>Stops a scan; the next scan starts over and the old .txt stays untouched.</summary>
+        private void StopSampling()
+        {
+            start_sampled = false;
+            resampled = true;
+            try { File.Delete(SampleFilePath() + ".tmp"); } catch { }
+        }
+
         public void Collect_data()
         {
-
-            string target_path = scene_path.Replace("/UserData/studio/scene/", "").Replace(".png", "").Replace(currentDirectory, "").Replace("/CharaStudio_Data/..", "");
-            string filePath = (currentDirectory + "/UserData/KK_osr_sr6_link/" + target_path + ".txt").Replace("/UserData//studio/scene/", "");
-            try { File.Delete(filePath); } catch { }
+            string filePath = SampleFilePath();
             if (Timeline.Timeline.isPlaying)
             {
                 Timeline.Timeline.Pause();
@@ -773,7 +798,7 @@ namespace KK_osr2_sr6_link
                 Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
                 for (int i = 0; i < charas_num.Value; i++)
                 {
-                    string female_chara = "chaF_00" + i.ToString();
+                    string female_chara = "chaF_" + i.ToString("000"); // Studio 用 no.ToString("000") 命名
                     GameObject female_chara_root = GameObject.Find(female_chara);
 
                     if (female_chara_root != null)
@@ -786,7 +811,7 @@ namespace KK_osr2_sr6_link
                         female_charas.Add(female_chara_root, chara_name);
                         charas.Add(female_chara_root, chara_name);
                     }
-                    string male_chara = "chaM_00" + i.ToString();
+                    string male_chara = "chaM_" + i.ToString("000");
                     GameObject male_chara_root = GameObject.Find(male_chara);
                     if (male_chara_root != null)
                     {
@@ -998,7 +1023,9 @@ namespace KK_osr2_sr6_link
                     cycle = true;
                     start_sampled = false;
                     Logger.LogInfo("finish!!!!!!!!!\n\n\n\n");
-                    using (StreamWriter writer = File.CreateText(filePath))
+                    // 掃完才換掉舊檔，掃描失敗或中途停止時舊資料還在
+                    string tempPath = filePath + ".tmp";
+                    using (StreamWriter writer = File.CreateText(tempPath))
                     {
                         writer.WriteLine("New");
                         foreach (Action_data data in action_list)
@@ -1045,6 +1072,8 @@ namespace KK_osr2_sr6_link
                             }
                         }
                     }
+                    if (File.Exists(filePath)) File.Replace(tempPath, filePath, null);
+                    else File.Move(tempPath, filePath);
                     // Notify only after the writer closes so WPF reads a complete new sample.
                     if (link) SendSceneMessage(BuildSceneMessage(filePath, 0, interval_time));
                 }
@@ -1053,30 +1082,68 @@ namespace KK_osr2_sr6_link
 
         private void ReceiveClient()
         {
+            Socket current = null;
+            Decoder decoder = null;
+            StringBuilder pending = new StringBuilder();
+            char[] chars = new char[Encoding.UTF8.GetMaxCharCount(buffer.Length)];
             while (!end)
             {
                 if (autorelink.Value) { Link_server(); }
-                if (clientSocket != null && clientSocket.Connected)
+                Socket sock = clientSocket;
+                if (sock != null && sock.Connected)
                 {
+                    // 換了連線就丟掉上一條連線沒收完的半則訊息
+                    if (!ReferenceEquals(sock, current))
+                    {
+                        current = sock;
+                        decoder = Encoding.UTF8.GetDecoder();
+                        pending.Length = 0;
+                    }
                     try
                     {
-                        int bytesRead = clientSocket.Receive(buffer);
+                        int bytesRead = sock.Receive(buffer);
                         if (bytesRead == 0)   // 對端正常關閉,別讓迴圈空轉
                         {
                             Logger.LogInfo("Server closed connection.");
-                            link = false;
-                            try { clientSocket.Close(); } catch { }
+                            DropConnection(sock);
                             continue;
                         }
-                        pending_commands.Enqueue(Encoding.UTF8.GetString(buffer, 0, bytesRead));
+                        // 一次 Receive 可能有好幾則指令，也可能只有半則，照換行切開
+                        pending.Append(chars, 0, decoder.GetChars(buffer, 0, bytesRead, chars, 0));
+                        EnqueueLines(pending);
                     }
-                    catch (Exception e) { Logger.LogInfo("ReceiveClient error: " + e.Message); }
+                    catch (Exception e)
+                    {
+                        // 不設 link = false 的話 autorelink 永遠不會重連
+                        Logger.LogInfo("ReceiveClient error: " + e.Message);
+                        DropConnection(sock);
+                    }
                 }
                 else
                 {
                     Thread.Sleep(10);   // 沒連線時別空轉燒 CPU
                 }
             }
+        }
+
+        // 只關這條連線；主執行緒的 connect 按鈕可能已經換上新的 socket
+        private static void DropConnection(Socket sock)
+        {
+            try { sock.Close(); } catch { }
+            if (ReferenceEquals(clientSocket, sock)) link = false;
+        }
+
+        private void EnqueueLines(StringBuilder pending)
+        {
+            string text = pending.ToString();
+            int start = 0, newline;
+            while ((newline = text.IndexOf('\n', start)) >= 0)
+            {
+                string line = text.Substring(start, newline - start).TrimEnd('\r');
+                if (line.Length > 0) pending_commands.Enqueue(line);
+                start = newline + 1;
+            }
+            pending.Remove(0, start);
         }
 
         private void ProcessPendingCommands()

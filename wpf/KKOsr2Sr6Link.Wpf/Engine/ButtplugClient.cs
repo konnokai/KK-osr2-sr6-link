@@ -29,10 +29,13 @@ public sealed class ButtplugDevice
 /// </summary>
 public sealed class ButtplugClient : IDisposable
 {
-    private ClientWebSocket? _ws;
+    // receive loop 結束時要跟 UI thread 比對是不是目前的連線
+    private volatile ClientWebSocket? _ws;
     private CancellationTokenSource? _cts;
+    private volatile IReadOnlyList<ButtplugDevice> _devices = Array.Empty<ButtplugDevice>();
 
-    public List<ButtplugDevice> Devices { get; } = new();
+    // websocket thread 換掉整份清單，UI thread 走訪的是舊快照，不會在走訪中途被改
+    public IReadOnlyList<ButtplugDevice> Devices => _devices;
 
     public event Action? Connected;
     public event Action? Disconnected;
@@ -78,39 +81,57 @@ public sealed class ButtplugClient : IDisposable
             }
         }
         catch (OperationCanceledException) { }
-        catch (WebSocketException ex) { Error?.Invoke(ex.Message); }
-        finally { Disconnected?.Invoke(); }
+        catch (Exception ex) { Error?.Invoke(ex.Message); }
+        finally
+        {
+            // 迴圈停了就沒人收訊息，連線也要跟著關掉，IsConnected 才不會一直是 true
+            try { ws.Abort(); } catch { }
+            // 重連時舊迴圈可能比新連線晚結束，這時不能清掉新連線的裝置
+            if (_ws == null || ReferenceEquals(_ws, ws))
+            {
+                _devices = Array.Empty<ButtplugDevice>();
+                DevicesChanged?.Invoke();
+                Disconnected?.Invoke();
+            }
+        }
     }
 
     public void HandleMessage(string message)
     {
-        JsonNode? parsed;
-        try { parsed = JsonNode.Parse(message); }
-        catch (System.Text.Json.JsonException ex) { Error?.Invoke("bad message: " + ex.Message); return; }
-        if (parsed is not JsonArray arr) return;
+        var devices = new List<ButtplugDevice>(Devices);
         bool changed = false;
-        foreach (var node in arr)
+        try
         {
-            if (node is not JsonObject obj) continue;
-            if (obj.ContainsKey("DeviceList"))
+            if (JsonNode.Parse(message) is not JsonArray arr) return;
+            foreach (var node in arr)
             {
-                Devices.Clear();
-                if (obj["DeviceList"]?["Devices"] is JsonArray devs)
-                    foreach (var d in devs)
-                        if (d is JsonObject dObj) AddDevice(dObj);
-                changed = true;
+                if (node is not JsonObject obj) continue;
+                if (obj.ContainsKey("DeviceList"))
+                {
+                    devices.Clear();
+                    if (obj["DeviceList"]?["Devices"] is JsonArray devs)
+                        foreach (var d in devs)
+                            if (d is JsonObject dObj) AddDevice(devices, dObj);
+                    changed = true;
+                }
+                else if (obj.ContainsKey("DeviceAdded"))
+                {
+                    if (obj["DeviceAdded"] is JsonObject dObj) AddDevice(devices, dObj);
+                    changed = true;
+                }
+                // ServerInfo: nothing actionable to store (matches Qt's debug-only handling).
             }
-            else if (obj.ContainsKey("DeviceAdded"))
-            {
-                if (obj["DeviceAdded"] is JsonObject dObj) AddDevice(dObj);
-                changed = true;
-            }
-            // ServerInfo: nothing actionable to store (matches Qt's debug-only handling).
         }
-        if (changed) DevicesChanged?.Invoke();
+        // 欄位型別不對時 GetValue 會丟 InvalidOperationException / FormatException，不只 JsonException
+        catch (Exception ex) { Error?.Invoke("bad message: " + ex.Message); return; }
+        if (changed)
+        {
+            _devices = devices;
+            DevicesChanged?.Invoke();
+        }
     }
 
-    private void AddDevice(JsonObject info)
+    private static void AddDevice(List<ButtplugDevice> devices, JsonObject info)
     {
         var device = new ButtplugDevice
         {
@@ -122,8 +143,8 @@ public sealed class ButtplugClient : IDisposable
         device.WorkWay = way;
         for (int i = 0; i < count; i++) { device.Feature.Add(0); device.FeatureEnable.Add(0); }
 
-        if (Devices.Exists(d => d.Index == device.Index)) return; // dedup by index, like devices_index
-        Devices.Add(device);
+        if (devices.Exists(d => d.Index == device.Index)) return; // dedup by index, like devices_index
+        devices.Add(device);
     }
 
     private static (string, int) FeatureOf(JsonObject? messages)
@@ -208,7 +229,8 @@ public sealed class ButtplugClient : IDisposable
         catch { }
         _ws?.Dispose(); _ws = null;
         _cts?.Dispose(); _cts = null;
-        Devices.Clear();
+        _devices = Array.Empty<ButtplugDevice>();
+        DevicesChanged?.Invoke();
     }
 
     public void Dispose() => _ = DisconnectAsync();

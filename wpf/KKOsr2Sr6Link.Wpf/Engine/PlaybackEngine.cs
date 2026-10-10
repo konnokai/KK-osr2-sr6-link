@@ -13,7 +13,10 @@ public readonly record struct AxisCommand(Axis Axis, int ScaledValue, int SleepM
 /// </summary>
 public sealed class PlaybackEngine
 {
-    public const int IntervalMs = 100; // frame cadence
+    public const int DefaultIntervalMs = 100;
+
+    /// <summary>Time between two frames; set from the plugin's scene message interval.</summary>
+    public int IntervalMs { get; set; } = DefaultIntervalMs;
 
     // Per-axis state, indexed 0..5 (L0..R2).
     public List<int>[] AxisValues { get; } = { new(), new(), new(), new(), new(), new() };
@@ -39,7 +42,7 @@ public sealed class PlaybackEngine
     /// Send every axis to its mid position (500) on all connected outputs — serial (if open) and each
     /// mapped+enabled Buttplug linear feature. Clears the dedup state so the next live frame re-sends.
     /// </summary>
-    public void ResetAll(int sleepMs = IntervalMs)
+    public void ResetAll(int sleepMs = DefaultIntervalMs)
     {
         for (int a = 0; a < 6; a++)
         {

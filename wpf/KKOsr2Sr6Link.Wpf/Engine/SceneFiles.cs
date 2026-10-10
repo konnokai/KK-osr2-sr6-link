@@ -53,8 +53,10 @@ public static class SceneFiles
     }
 
     public static void SaveSr6Script(string path, AxisScript script)
+        => AtomicFile.Write(path, s => WriteSr6Script(s, script));
+
+    private static void WriteSr6Script(Stream stream, AxisScript script)
     {
-        using var stream = File.Create(path);
         using var w = new Utf8JsonWriter(stream, Indented);
         w.WriteStartObject();
         w.WriteStartArray("actions");
@@ -114,8 +116,10 @@ public static class SceneFiles
     };
 
     public static void SaveSr6Cfg(string path, IEnumerable<ScenePart> parts)
+        => AtomicFile.Write(path, s => WriteSr6Cfg(s, parts));
+
+    private static void WriteSr6Cfg(Stream stream, IEnumerable<ScenePart> parts)
     {
-        using var stream = File.Create(path);
         using var w = new Utf8JsonWriter(stream, Indented);
         w.WriteStartArray();
         foreach (var part in parts)
@@ -159,8 +163,15 @@ public static class SceneFiles
         if (axes.Count != 6) throw new ArgumentException("A complete action set needs six axes.", nameof(axes));
         string? dir = Path.GetDirectoryName(stem);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        for (int i = 0; i < 6; i++) SaveSr6Script(AxisInfo.Sr6ScriptPath(stem, (Axis)i), axes[i]);
-        SaveSr6Cfg(AxisInfo.Sr6CfgPath(stem), parts);
+        // 共用 profile 會被很多場景引用。七個暫存檔都寫好才開始換，寫到一半失敗時舊的整組還在
+        var files = new List<(string, Action<Stream>)>();
+        for (int i = 0; i < 6; i++)
+        {
+            var script = axes[i];
+            files.Add((AxisInfo.Sr6ScriptPath(stem, (Axis)i), s => WriteSr6Script(s, script)));
+        }
+        files.Add((AxisInfo.Sr6CfgPath(stem), s => WriteSr6Cfg(s, parts)));
+        AtomicFile.WriteAll(files);
     }
 
     /// <summary>Copies an optional profile asset without deleting an existing asset when no source exists.</summary>
@@ -170,7 +181,7 @@ public static class SceneFiles
         if (string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase)) return;
         string? dir = Path.GetDirectoryName(destination);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        File.Copy(source, destination, true);
+        AtomicFile.Copy(source, destination);
     }
 
     public static bool HasAnyActionSetFiles(string stem)
@@ -234,7 +245,7 @@ public static class SceneFiles
             throw new ArgumentException(error, nameof(profileKey));
         string? dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-        File.WriteAllText(path, profileKey + Environment.NewLine, new UTF8Encoding(false));
+        AtomicFile.WriteAllText(path, profileKey + Environment.NewLine, new UTF8Encoding(false));
     }
 
     // ---- .funscript export ----
@@ -247,8 +258,11 @@ public static class SceneFiles
     public static void ExportFunscript(string path, IReadOnlyList<int> values, int referenceCount)
     {
         int durationSec = referenceCount <= 0 ? 0 : (int)Math.Ceiling((referenceCount - 1) * 0.1);
+        AtomicFile.Write(path, s => WriteFunscript(s, values, durationSec));
+    }
 
-        using var stream = File.Create(path);
+    private static void WriteFunscript(Stream stream, IReadOnlyList<int> values, int durationSec)
+    {
         using var w = new Utf8JsonWriter(stream, Indented);
         w.WriteStartObject();
 

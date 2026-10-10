@@ -72,6 +72,6 @@ public sealed class IniConfig
                 sb.Append(key).Append('=').Append(value).Append('\n');
             sb.Append('\n');
         }
-        File.WriteAllText(_path, sb.ToString(), Encoding.UTF8);
+        AtomicFile.WriteAllText(_path, sb.ToString(), Encoding.UTF8);
     }
 }

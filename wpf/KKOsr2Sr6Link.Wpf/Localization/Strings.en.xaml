@@ -110,6 +110,7 @@
     <s:String x:Key="St.RawUnavailable">raw scene data is unavailable; regeneration controls are disabled</s:String>
     <s:String x:Key="St.ProfileListFailed">profile list failed: {0}</s:String>
     <s:String x:Key="St.ProfileUnbound">profile unbound</s:String>
+    <s:String x:Key="St.UnbindNeedsPlugin">plugin is disconnected; connect it before unbinding so the scene card is updated</s:String>
     <s:String x:Key="St.PlaybackIndexOutOfRange">playback index {0} is outside the loaded action range</s:String>
     <s:String x:Key="St.SaveFailed">save failed: {0}</s:String>
     <s:String x:Key="St.ExportedFunscripts">exported 6 funscripts</s:String>

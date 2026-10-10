@@ -30,6 +30,8 @@ public partial class MainWindow : Window
     private SceneActionSource _actionSource;
     private string _profileKey = "";
     private string _cardProfileKey = "";
+    // 解除綁定後，plugin 送出、還在排隊的訊息仍帶著舊 key；收到不帶 key 的訊息前，舊 key 也算同一個場景
+    private string _unbindingKey = "";
     private string _selectedProfileKey = "";
     private List<string> _profiles = new();
     private bool _bindingNeedsSceneSave;
@@ -277,16 +279,18 @@ public partial class MainWindow : Window
     private void FeatureList_Changed(object s, SelectionChangedEventArgs e)
     {
         int d = DeviceList.SelectedIndex, f = FeatureList.SelectedIndex;
-        if (d < 0 || d >= _buttplug.Devices.Count || f < 0) return;
-        AxisMapList.SelectedIndex = _buttplug.Devices[d].Feature[f];
+        var devices = _buttplug.Devices; // 快照可能被 websocket thread 換掉，Count 和 indexer 要讀同一份
+        if (d < 0 || d >= devices.Count || f < 0 || f >= devices[d].Feature.Count) return;
+        AxisMapList.SelectedIndex = devices[d].Feature[f];
     }
 
     // Map the selected feature to an axis and enable it.
     private void AxisMap_Changed(object s, SelectionChangedEventArgs e)
     {
         int d = DeviceList.SelectedIndex, f = FeatureList.SelectedIndex, a = AxisMapList.SelectedIndex;
-        if (d < 0 || d >= _buttplug.Devices.Count || f < 0 || a < 0) return;
-        var dev = _buttplug.Devices[d];
+        var devices = _buttplug.Devices;
+        if (d < 0 || d >= devices.Count || f < 0 || a < 0 || f >= devices[d].Feature.Count) return;
+        var dev = devices[d];
         dev.Feature[f] = a;
         dev.FeatureEnable[f] = 1;
     }
@@ -300,7 +304,12 @@ public partial class MainWindow : Window
 
         _buttplug.DevicesChanged += () => Dispatcher.Invoke(RefreshDeviceList);
         _buttplug.Connected += () => Dispatcher.Invoke(() => Status(L("St.IntifaceConnected")));
-        _buttplug.Disconnected += () => Dispatcher.Invoke(() => Status(L("St.IntifaceDisconnected")));
+        _buttplug.Disconnected += () => Dispatcher.Invoke(() =>
+        {
+            // 重連時舊連線可能晚一步才回報斷線，按鈕要看現在的狀態
+            LinkIntifaceBtn.Content = _buttplug.IsConnected ? L("L.Disconnect") : L("L.Connect");
+            Status(L("St.IntifaceDisconnected"));
+        });
         _buttplug.Error += e => Dispatcher.Invoke(() => Status(L("St.IntifaceError", e)));
         _serial.Error += e => Dispatcher.Invoke(() => Status(L("St.SerialError", e)));
 
@@ -472,7 +481,9 @@ public partial class MainWindow : Window
     {
         try
         {
-            bool sameScene = _filePath == msg.Path && _cardProfileKey == msg.ProfileKey;
+            if (msg.ProfileKey == _cardProfileKey) _unbindingKey = "";
+            bool sameScene = _filePath == msg.Path &&
+                (_cardProfileKey == msg.ProfileKey || (_unbindingKey != "" && _unbindingKey == msg.ProfileKey));
             bool reloadForNewSample = false;
             if (sameScene && _actionSource == SceneActionSource.SharedProfile)
             {
@@ -503,6 +514,7 @@ public partial class MainWindow : Window
                 _engine.Enabled[a] = _enables[a].IsChecked == true;
             }
             _engine.SerialEnabled = _serial.IsOpen;
+            if (msg.Sleep > 0) _engine.IntervalMs = (int)Math.Round(msg.Sleep * 1000);
             _engine.Dispatch(index);
 
             // move playheads + reflect scaled values on sliders
@@ -556,6 +568,7 @@ public partial class MainWindow : Window
         _filePath = rawPath; // keep raw as the identity used by the plugin
         _rawDataPath = "";
         _cardProfileKey = cardProfileKey ?? "";
+        _unbindingKey = "";
         _profileKey = "";
         _selectedProfileKey = "";
         _actionSource = SceneActionSource.None;
@@ -780,6 +793,7 @@ public partial class MainWindow : Window
         _filePath = "";
         _rawDataPath = "";
         _cardProfileKey = "";
+        _unbindingKey = "";
         _profileKey = "";
         _selectedProfileKey = "";
         _lovemakingDatas = new List<LovemakingData>();
@@ -1051,12 +1065,17 @@ public partial class MainWindow : Window
     private void UnbindProfile_Click(object s, RoutedEventArgs e)
     {
         if (_filePath == "") { Status(L("St.NoScene")); return; }
+        // 卡片上的 key 只有 plugin 能清掉；沒連線就解除，下次載入時 LoadScene 又會照卡片把 .sr6ref 寫回來
+        if (!_server.IsConnected) { Status(L("St.UnbindNeedsPlugin")); return; }
         string path = ResolvedPath();
         try
         {
+            string oldCardKey = _cardProfileKey;
             File.Delete(AxisInfo.Sr6RefPath(path));
             LoadScene(_filePath);
-            Status(L("St.ProfileUnbound"));
+            _unbindingKey = oldCardKey;
+            bool sent = _server.SendProfileBinding("");
+            Status(sent ? L("St.ProfileUnbound") : L("St.UnbindNeedsPlugin"));
         }
         catch (Exception ex) { Status(L("St.SaveFailed", ex.Message)); }
     }
@@ -1126,8 +1145,9 @@ public partial class MainWindow : Window
     {
         FeatureList.Items.Clear();
         int i = DeviceList.SelectedIndex;
-        if (i < 0 || i >= _buttplug.Devices.Count) return;
-        var dev = _buttplug.Devices[i];
+        var devices = _buttplug.Devices;
+        if (i < 0 || i >= devices.Count) return;
+        var dev = devices[i];
         for (int f = 0; f < dev.Feature.Count; f++) FeatureList.Items.Add($"feature {f}");
     }
 

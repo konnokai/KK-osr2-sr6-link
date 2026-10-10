@@ -63,6 +63,30 @@ public class SceneProfileTests
     }
 
     [Fact]
+    public void SaveActionSet_FailureKeepsOldSet_SuccessLeavesNoTempFiles()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "kkatomic_" + Path.GetRandomFileName());
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var stem = Path.Combine(dir, "shared");
+            SceneFiles.SaveActionSet(stem, Axes(3, 10), Parts());
+            Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
+
+            // 擋住第三軸的暫存檔，存到一半就會失敗
+            string blocked = AxisInfo.Sr6ScriptPath(stem, Axis.L2) + ".tmp";
+            Directory.CreateDirectory(blocked);
+            Assert.ThrowsAny<Exception>(() => SceneFiles.SaveActionSet(stem, Axes(4, 20), Parts()));
+            Directory.Delete(blocked);
+
+            Assert.True(SceneFiles.TryLoadActionSet(stem, out var kept, out _));
+            Assert.All(kept.Axes, a => Assert.Equal(new[] { 10, 10, 10 }, a.Values));
+            Assert.Empty(Directory.GetFiles(dir, "*.tmp"));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void TwoScenesShareUpdates_AndForkStaysIndependent()
     {
         var root = Path.Combine(Path.GetTempPath(), "kkscenes_" + Path.GetRandomFileName());

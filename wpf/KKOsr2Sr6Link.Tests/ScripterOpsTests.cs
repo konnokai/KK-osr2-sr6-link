@@ -64,7 +64,7 @@ public class ScripterOpsTests
         var values = new List<int> { 10, 20, 30, 40, 50 };
         var old = new List<int>(values);
         var sel = new List<int> { 0, 2 };
-        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, sel, 1));
+        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, 1));
         Assert.Equal(old, values);
     }
 
@@ -74,7 +74,35 @@ public class ScripterOpsTests
         var values = new List<int> { 10, 20, 30, 40, 50 };
         var old = new List<int>(values);
         var sel = new List<int> { 2, 3 };
-        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, sel, 1));
+        Assert.Null(ScripterOps.MoveHorizontal(values, old, sel, 1));
+        Assert.Equal(old, values);
+    }
+
+    [Fact]
+    public void ShiftHorizontal_AdjacentPointsKeepTheirValues()
+    {
+        var values = new List<int> { 10, 20, 30, 40, 50, 60 };
+        var sel = ScripterOps.ShiftHorizontal(values, new List<int> { 2, 3 }, 1);
+        Assert.Equal(new List<int> { 3, 4 }, sel);
+        Assert.Equal(new List<int> { 10, 20, -1, 30, 40, 60 }, values);
+
+        sel = ScripterOps.ShiftHorizontal(values, new List<int> { 3, 4 }, -1);
+        Assert.Equal(new List<int> { 2, 3 }, sel);
+        Assert.Equal(new List<int> { 10, 20, 30, 40, -1, 60 }, values);
+    }
+
+    [Fact]
+    public void MoveHorizontal_DragRecomputesFromPressSnapshot()
+    {
+        var old = new List<int> { 10, 20, 30, 40, 50, 60, 70 };
+        var values = new List<int>(old);
+        var sel = new List<int> { 2, 3 };
+
+        Assert.Equal(new List<int> { 3, 4 }, ScripterOps.MoveHorizontal(values, old, sel, 1));
+        Assert.Equal(new List<int> { 10, 20, -1, 30, 40, 60, 70 }, values);
+
+        // 拖回原位，中途蓋掉的 50 要回來
+        Assert.Equal(new List<int> { 2, 3 }, ScripterOps.MoveHorizontal(values, old, sel, 0));
         Assert.Equal(old, values);
     }
 
