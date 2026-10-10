@@ -78,10 +78,12 @@ public sealed class ScripterEdit : FrameworkElement
 
     public void Refresh()
     {
-        if (Values.Count >= 1)
-            Width = (Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
+        Width = ContentWidth;
         InvalidateVisual();
     }
+
+    // 換場景會先清空 Values，0 筆時要夾到 0，不然寬度變負數，WPF 量測會丟例外
+    private double ContentWidth => Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
 
     /// <summary>Pick the per-frame <see cref="Intervals"/> so the whole curve just fills
     /// <paramref name="viewport"/> px. Same as OverviewEdit.FitToWidth; user can still zoom after.</summary>
@@ -539,7 +541,7 @@ public sealed class ScripterEdit : FrameworkElement
     }
 
     protected override Size MeasureOverride(Size availableSize)
-        => new(double.IsNaN(Width) ? (Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2 : Width, Height);
+        => new(double.IsNaN(Width) ? ContentWidth : Width, Height);
 
     private static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     private static Pen FreezePen(Color c, double w) { var p = new Pen(new SolidColorBrush(c), w); p.Freeze(); return p; }

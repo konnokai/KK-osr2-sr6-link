@@ -62,10 +62,12 @@ public sealed class OverviewEdit : FrameworkElement
     /// <summary>Recompute layout width from the data, like Qt's setFixedWidth in paintEvent.</summary>
     public void Refresh()
     {
-        if (Values.Count >= 1)
-            Width = (Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
+        Width = ContentWidth;
         InvalidateVisual();
     }
+
+    // 換場景會先清空 Values，0 筆時要夾到 0，不然寬度變負數，WPF 量測會丟例外
+    private double ContentWidth => Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
 
     private double Y(int value, double h)
         => (h - _valueEdge * 2 - Pad * 2) / -999.0 * value + h - _valueEdge - Pad;
@@ -249,7 +251,7 @@ public sealed class OverviewEdit : FrameworkElement
     }
 
     protected override Size MeasureOverride(Size availableSize)
-        => new(double.IsNaN(Width) ? (Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2 : Width, Height);
+        => new(double.IsNaN(Width) ? ContentWidth : Width, Height);
 
     private static Brush Freeze(Color c) { var b = new SolidColorBrush(c); b.Freeze(); return b; }
     private static Pen FreezePen(Color c, double w) { var p = new Pen(new SolidColorBrush(c), w); p.Freeze(); return p; }

@@ -74,6 +74,10 @@ Hardware outputs:
 
 Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the shell; `Engine/` holds the non-UI logic (`LinkServer`, `SerialOutput`, `ButtplugClient`, `PlaybackEngine`, `AppConfig` over `IniConfig`, scene parsing), `Controls/` the custom widgets (`RangeSlider`, `OverviewEdit`, `ScripterEdit`). Method comments cite the `mainwindow.cpp` lines they mirror — keep that cross-reference when porting more.
 
+**Single instance** — `App.OnStartup` (no `StartupUri`) holds a named `Mutex`; a second launch signals the `EventWaitHandle` so the running window restores/activates, then exits. Two instances would fight over the TCP and serial ports.
+
+`OverviewEdit` / `ScripterEdit` size themselves from `Values`. `Values` can be empty (scene switch calls `ClearActions`), so width math must clamp at 0 — a negative `Size` throws during measure.
+
 **Localization** (`Localization/`) — runtime UI language switch, no restart:
 - Strings live in swappable `ResourceDictionary` files `Strings.<lang>.xaml` (`en`, `zh-Hant`). XAML binds them with `{DynamicResource L.*}` (static UI) / `{DynamicResource St.*}` (status messages); swapping the merged dictionary updates everything live.
 - `Loc.SetLanguage(lang)` swaps the dictionary; `Loc.T(key)` / `Loc.T(key, args)` resolve a string (or format one) from code. `MainWindow` aliases these as `L(...)`.
