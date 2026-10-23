@@ -30,7 +30,9 @@ public sealed class OverviewEdit : FrameworkElement
     public List<int> SplitLines { get; set; } = new();
     public int SelectedLine { get; set; }
     public int SelectedPart { get; set; }
-    public int Intervals { get; private set; } = 100;
+    public double Intervals { get; private set; } = 100;
+    // 上次 FitToWidth 算出的寬度，縮小最多縮到這裡
+    private double _fitIntervals;
     private int _valueEdge = 5;
     private bool _mouseScrub, _mouseSplit;
 
@@ -53,9 +55,10 @@ public sealed class OverviewEdit : FrameworkElement
     public void FitToWidth(double viewport)
     {
         if (Values.Count <= 1 || viewport <= 0) return;
-        int interval = (int)((viewport - _valueEdge * 2 - Pad * 2) / (Values.Count - 1));
-        Intervals = interval < 1 ? 1 : interval;
+        Intervals = TimelineZoom.Fit(viewport, _valueEdge * 2 + Pad * 2, Values.Count);
         UpdateEdge();
+        // 點的半徑跟著寬度變，換了半徑要再算一次，總寬才會剛好等於可見寬度
+        Intervals = _fitIntervals = TimelineZoom.Fit(viewport, _valueEdge * 2 + Pad * 2, Values.Count);
         Refresh();
     }
 
@@ -67,12 +70,13 @@ public sealed class OverviewEdit : FrameworkElement
     }
 
     // 換場景會先清空 Values，0 筆時要夾到 0，不然寬度變負數，WPF 量測會丟例外
-    private double ContentWidth => Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
+    // 取整數往下捨，小數誤差才不會讓寬度超過可見寬度、多冒出捲軸
+    private double ContentWidth => Math.Floor(Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2);
 
     private double Y(int value, double h)
         => (h - _valueEdge * 2 - Pad * 2) / -999.0 * value + h - _valueEdge - Pad;
 
-    private int X(int i) => _valueEdge + Intervals * i + Pad;
+    private double X(int i) => _valueEdge + Intervals * i + Pad;
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -108,7 +112,7 @@ public sealed class OverviewEdit : FrameworkElement
         // vertical grid + split lines + time labels
         for (int i = 0; i < Values.Count; i++)
         {
-            int x = X(i);
+            double x = X(i);
             dc.DrawLine(GridPen, new Point(x, _valueEdge + Pad), new Point(x, h - Pad - _valueEdge));
             if (SplitLines.Contains(i))
                 dc.DrawLine(SplitPen, new Point(x, 0), new Point(x, h));
@@ -124,7 +128,7 @@ public sealed class OverviewEdit : FrameworkElement
         }
 
         // playhead
-        int px = X(SelectedLine);
+        double px = X(SelectedLine);
         dc.DrawLine(PlayPen, new Point(px, Pad + _valueEdge - 5), new Point(px, h - Pad - _valueEdge + 5));
         DrawTriangle(dc, new Point(px, Pad + _valueEdge - 5), new Point(px + 5, Pad + _valueEdge - 10), new Point(px - 5, Pad + _valueEdge - 10));
         DrawTriangle(dc, new Point(px, h - Pad - _valueEdge + 5), new Point(px - 5, h - Pad - _valueEdge + 10), new Point(px + 5, h - Pad - _valueEdge + 10));
@@ -168,7 +172,7 @@ public sealed class OverviewEdit : FrameworkElement
             _mouseSplit = true;
             for (int i = 0; i < Values.Count; i++)
             {
-                int x = X(i);
+                double x = X(i);
                 if (x - _valueEdge < mx && mx < x + _valueEdge)
                 {
                     if (i == 0 || i == Values.Count - 1) return;
@@ -193,7 +197,7 @@ public sealed class OverviewEdit : FrameworkElement
     {
         for (int i = 0; i < Values.Count; i++)
         {
-            int x = X(i);
+            double x = X(i);
             if (x - _valueEdge < mx && mx < x + _valueEdge) { SelectedLine = i; CurrentLine?.Invoke(i); InvalidateVisual(); return; }
         }
     }
@@ -225,17 +229,15 @@ public sealed class OverviewEdit : FrameworkElement
         if (e.Delta > 0) ZoomIn(); else ZoomOut();
     }
 
-    private void ZoomIn()
+    internal void ZoomIn()
     {
-        if (Intervals + 5 > 200) return;
-        Intervals += 5;
+        Intervals = TimelineZoom.In(Intervals);
         UpdateEdge(); Refresh();
     }
 
-    private void ZoomOut()
+    internal void ZoomOut()
     {
-        if (Intervals - 5 > 5) Intervals -= 5;
-        else if (Intervals - 1 > 1) Intervals -= 1;
+        Intervals = TimelineZoom.Out(Intervals, _fitIntervals > 0 ? _fitIntervals : 1);
         UpdateEdge(); Refresh();
     }
 

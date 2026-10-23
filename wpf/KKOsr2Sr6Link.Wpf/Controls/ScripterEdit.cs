@@ -53,7 +53,9 @@ public sealed class ScripterEdit : FrameworkElement
         }
     }
     public int SelectedLine { get; set; }
-    public int Intervals { get; private set; } = 100;
+    public double Intervals { get; private set; } = 100;
+    // 上次 FitToWidth 算出的寬度，縮小最多縮到這裡
+    private double _fitIntervals;
 
     /// <summary>Part boundaries shared with the OverviewEdit; rendered as split lines + a highlight box
     /// so the overview's parts are visible on every axis tab. <see cref="SelectedPart"/> is the split value
@@ -101,16 +103,18 @@ public sealed class ScripterEdit : FrameworkElement
     }
 
     // 換場景會先清空 Values，0 筆時要夾到 0，不然寬度變負數，WPF 量測會丟例外
-    private double ContentWidth => Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2;
+    // 取整數往下捨，小數誤差才不會讓寬度超過可見寬度、多冒出捲軸
+    private double ContentWidth => Math.Floor(Math.Max(0, Values.Count - 1) * Intervals + _valueEdge * 2 + Pad * 2);
 
     /// <summary>Pick the per-frame <see cref="Intervals"/> so the whole curve just fills
     /// <paramref name="viewport"/> px. Same as OverviewEdit.FitToWidth; user can still zoom after.</summary>
     public void FitToWidth(double viewport)
     {
         if (Values.Count <= 1 || viewport <= 0) return;
-        int interval = (int)((viewport - _valueEdge * 2 - Pad * 2) / (Values.Count - 1));
-        Intervals = interval < 1 ? 1 : interval;
+        Intervals = TimelineZoom.Fit(viewport, _valueEdge * 2 + Pad * 2, Values.Count);
         UpdateEdge();
+        // 點的半徑跟著寬度變，換了半徑要再算一次，總寬才會剛好等於可見寬度
+        Intervals = _fitIntervals = TimelineZoom.Fit(viewport, _valueEdge * 2 + Pad * 2, Values.Count);
         Refresh();
     }
 
@@ -127,7 +131,7 @@ public sealed class ScripterEdit : FrameworkElement
     public void RecordUndo() => PushUndo(Values);
 
     private double Y(int value) => (ActualHeight - _valueEdge * 2 - Pad * 2) / -999.0 * value + ActualHeight - _valueEdge - Pad;
-    private int X(int i) => _valueEdge + Intervals * i + Pad;
+    private double X(int i) => _valueEdge + Intervals * i + Pad;
 
     // ---------- rendering ----------
 
@@ -175,7 +179,7 @@ public sealed class ScripterEdit : FrameworkElement
         dc.DrawLine(GridDim, new Point(_valueEdge + Pad, h / 2), new Point(w - Pad - _valueEdge, h / 2));
 
         // playhead
-        int px = X(SelectedLine);
+        double px = X(SelectedLine);
         dc.DrawLine(PlayPen, new Point(px, Pad + _valueEdge - 5), new Point(px, h - Pad - _valueEdge + 5));
         Triangle(dc, new Point(px, Pad + _valueEdge - 5), new Point(px + 5, Pad + _valueEdge - 10), new Point(px - 5, Pad + _valueEdge - 10));
         Triangle(dc, new Point(px, h - Pad - _valueEdge + 5), new Point(px - 5, h - Pad - _valueEdge + 10), new Point(px + 5, h - Pad - _valueEdge + 10));
@@ -183,7 +187,7 @@ public sealed class ScripterEdit : FrameworkElement
         // vertical grid + time labels + points
         for (int i = 0; i < Values.Count; i++)
         {
-            int x = X(i);
+            double x = X(i);
             Pen grid = rebuildTimes.Contains(i) ? GridRebuild : selectedTimes.Contains(i) ? GridFull : GridDim;
             dc.DrawLine(grid, new Point(x, _valueEdge + Pad), new Point(x, h - Pad - _valueEdge));
             if (splitLines.Contains(i)) dc.DrawLine(SplitPen, new Point(x, 0), new Point(x, h));
@@ -222,7 +226,7 @@ public sealed class ScripterEdit : FrameworkElement
 
     private bool HitPoint(int i, Point p)
     {
-        int x = X(i);
+        double x = X(i);
         if (Values[i] == -1) return false;
         double y = Y(Values[i]);
         return x - _valueEdge < p.X && p.X < x + _valueEdge && y - _valueEdge < p.Y && p.Y < y + _valueEdge;
@@ -230,7 +234,7 @@ public sealed class ScripterEdit : FrameworkElement
 
     private bool HitColumn(int i, double mx)
     {
-        int x = X(i);
+        double x = X(i);
         return x - _valueEdge < mx && mx < x + _valueEdge;
     }
 
@@ -327,7 +331,7 @@ public sealed class ScripterEdit : FrameworkElement
             _rebuildEnd = p;
             _rebuildTimes.Clear();
             double lo = Math.Min(_rebuildStart.X, _rebuildEnd.X), hi = Math.Max(_rebuildStart.X, _rebuildEnd.X);
-            for (int i = 0; i < Values.Count; i++) { int x = X(i); if (lo < x && x < hi) _rebuildTimes.Add(i); }
+            for (int i = 0; i < Values.Count; i++) { double x = X(i); if (lo < x && x < hi) _rebuildTimes.Add(i); }
             InvalidateVisual(); return;
         }
         if (_mouse1 && !shift && !ctrl)
@@ -383,7 +387,7 @@ public sealed class ScripterEdit : FrameworkElement
         double loY = Math.Min(_press.Y, _move.Y), hiY = Math.Max(_press.Y, _move.Y);
         for (int i = 0; i < Values.Count; i++)
         {
-            int x = X(i);
+            double x = X(i);
             bool inX = loX < x && x < hiX;
             if (!inX) continue;
             if (Values[i] != -1)
@@ -485,8 +489,8 @@ public sealed class ScripterEdit : FrameworkElement
         InvalidateVisual();
     }
 
-    private void ZoomIn() { if (Intervals + 5 > 200) return; Intervals += 5; UpdateEdge(); Refresh(); }
-    private void ZoomOut() { if (Intervals - 5 > 5) Intervals -= 5; else if (Intervals - 1 > 1) Intervals -= 1; UpdateEdge(); Refresh(); }
+    internal void ZoomIn() { Intervals = TimelineZoom.In(Intervals); UpdateEdge(); Refresh(); }
+    internal void ZoomOut() { Intervals = TimelineZoom.Out(Intervals, _fitIntervals > 0 ? _fitIntervals : 1); UpdateEdge(); Refresh(); }
     private void UpdateEdge() { if (Intervals <= 100) _valueEdge = (int)((5 - 3) / (100.0 - 2) * Intervals + 3 - (5 - 3) / (100.0 - 2) * 2); }
 
     // ---------- operations (shared by menu + keyboard) ----------

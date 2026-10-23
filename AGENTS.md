@@ -36,6 +36,7 @@ One folder per component (file paths below are written relative to these):
 **WPF app** (`wpf/KKOsr2Sr6Link.Wpf/KKOsr2Sr6Link.Wpf.csproj`, .NET 8, `dotnet build` / `dotnet run`):
 - Build the app in Release with `dotnet build wpf/KKOsr2Sr6Link.Wpf/KKOsr2Sr6Link.Wpf.csproj --configuration Release --no-restore`.
 - `stage.ps1` (repo root) builds both in Release and copies them to `bin/`, laid out like the game root: `BepInEx/plugins/` gets only `KKS_osr2_sr6_link.dll` and `.pdb` (the other DLLs in the plugin output are game references), and `Link_osr2_sr6_to_kk_studio_wpf/` gets the whole WPF output folder. `-SkipBuild` only copies.
+- After any build that produces new Release output (plugin or WPF), run `./stage.ps1 -SkipBuild` without asking, so `bin/` always holds the latest files. If you have not built yet, run `./stage.ps1` instead; it builds both projects first.
 - xUnit tests in `wpf/KKOsr2Sr6Link.Tests/` — run Release tests with `dotnet test wpf/KKOsr2Sr6Link.Tests/KKOsr2Sr6Link.Tests.csproj --configuration Release --no-restore`. The plugin and Qt app have no tests; the WPF app does.
 
 ## Local DLL inspection
@@ -81,7 +82,7 @@ Port of the Qt app (`wpf/KKOsr2Sr6Link.Wpf/`). `MainWindow.xaml(.cs)` is the she
 
 **Single instance** — `App.OnStartup` (no `StartupUri`) holds a named `Mutex`; a second launch signals the `EventWaitHandle` so the running window restores/activates, then exits. Two instances would fight over the TCP and serial ports.
 
-`OverviewEdit` / `ScripterEdit` size themselves from `Values`. `Values` can be empty (scene switch calls `ClearActions`), so width math must clamp at 0 — a negative `Size` throws during measure.
+`OverviewEdit` / `ScripterEdit` size themselves from `Values`. `Intervals` is the pixel width of one frame and is a `double`: `FitToWidth` sets it so the whole timeline fills the `ScrollViewer` exactly (an integer would round down and leave long scenes half as wide). Ctrl+wheel / Ctrl+Left/Right zoom multiplies or divides it by 1.25 (`TimelineZoom`), between the last fit width and 200 px. `Values` can be empty (scene switch calls `ClearActions`), so width math must clamp at 0 — a negative `Size` throws during measure.
 
 In a curve, `-1` means "no point at this frame". Editor operations never turn the first or last frame into `-1`, but loaded files may already have `-1` there, so rendering must tolerate it (polylines come from `ScripterOps.Segments`). Assigning `ScripterEdit.Values` means a new list (scene switch, profile bind/create/fork): the setter clears selection, rebuild times and undo. Mouse edits that change values (Shift+left/right drag, Ctrl+right add/delete) snapshot on mouse-down and push undo on mouse-up. `OverviewEdit.Values` is the same `List` instance as axis 0's editor, so edits (including undo) must mutate the list in place, never swap the instance. Horizontal moves (`ScripterOps.ShiftHorizontal`) read all source values before writing, so adjacent selected points keep their values.
 
