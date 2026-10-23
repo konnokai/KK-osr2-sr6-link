@@ -39,9 +39,7 @@ namespace KK_osr2_sr6_link
         // 掃描開始時抓一次骨頭 Transform,取樣時不再每格 GameObject.Find
         private Dictionary<string, BoneSet> bone_cache = new Dictionary<string, BoneSet>();
 
-        public string female = "chaF_001";
         public GameObject femalehead;
-        public GameObject femaleRoot;
         public GameObject vagina;
         public GameObject femalethightL;
         public GameObject femalethightR;
@@ -58,10 +56,7 @@ namespace KK_osr2_sr6_link
         public GameObject femalehand1R;
         public GameObject femalehand2R;
 
-        public string male = "chaM_001";
-
         public GameObject malehead;
-        public GameObject maleRoot;
         public GameObject penis;
         public GameObject malethightL;
         public GameObject malethightR;
@@ -81,6 +76,17 @@ namespace KK_osr2_sr6_link
         private static ManualLogSource plugin_logger;
         private static int profile_save_requested;
         private static bool profile_save_wait_logged;
+
+        // 自訂男方：不是角色的物件（例如帶 FK/IK 的生物道具），順序跟 PartnerRoles 一樣
+        internal static readonly string[] PartnerRoles = { "penis", "hips", "thigh L", "thigh R", "head" };
+        internal static readonly ObjectCtrlInfo[] partner_nodes = new ObjectCtrlInfo[PartnerRoles.Length];
+        // 跟 chaF_001 一樣 8 個字元，HandleCommand 和 WPF 的 CharacterPair 都靠它認出男方
+        private const string PartnerRoot = "chaP_001";
+
+        private static Transform NodeTransform(ObjectCtrlInfo node)
+            => node?.guideObject == null ? null : node.guideObject.transformTarget;
+
+        private static bool PartnerReady() => partner_nodes.All(n => NodeTransform(n) != null);
 
         public static string CurrentProfileKey
         {
@@ -136,13 +142,13 @@ namespace KK_osr2_sr6_link
                 bool saved = SceneProfileController.TrySaveCurrentCard(targetPath);
                 Interlocked.Exchange(ref profile_save_requested, 0);
                 LogInfo("profile card save completed: " + saved + " path=" + targetPath);
-                ShowMessage(saved ? "Profile binding saved." : "Profile binding save failed. See log for details.");
+                ShowMessage(saved ? "Scene card saved." : "Scene card save failed. See log for details.");
             }
             catch (Exception ex)
             {
                 Interlocked.Exchange(ref profile_save_requested, 0);
                 LogInfo("profile card save failed: " + ex);
-                ShowMessage("Profile binding save failed. See log for details.");
+                ShowMessage("Scene card save failed. See log for details.");
             }
         }
 
@@ -267,6 +273,7 @@ namespace KK_osr2_sr6_link
             Config.Bind("link setting", "Link State", "", new ConfigDescription("Click to connect app", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer1 }));
             charas_num = Config.Bind("sampled setting", "charas_num", 10, "Scanning of number of charas of the same sex");
             Config.Bind("sampled setting", "Sample", "", new ConfigDescription("Click to sample sex data", null, new ConfigurationManagerAttributes { CustomDrawer = MyDrawer2 }));
+            Config.Bind("sampled setting", "Custom partner", "", new ConfigDescription("Studio nodes used as the male side", null, new ConfigurationManagerAttributes { CustomDrawer = PartnerDrawer }));
             SceneProfileController.Register();
             clientlistener = new Thread(ReceiveClient);
             clientlistener.IsBackground = true;
@@ -358,6 +365,32 @@ namespace KK_osr2_sr6_link
             GUILayout.EndVertical();
         }
 
+        public void PartnerDrawer(BepInEx.Configuration.ConfigEntryBase entry)
+        {
+            GUILayout.BeginVertical();
+            for (int i = 0; i < PartnerRoles.Length; i++)
+            {
+                GUILayout.BeginHorizontal();
+                ObjectCtrlInfo node = partner_nodes[i];
+                GUILayout.Label(PartnerRoles[i] + ": " + (NodeTransform(node) == null ? "<none>" : node.treeNodeObject.textName));
+                if (GUILayout.Button("use selected"))
+                {
+                    ObjectCtrlInfo[] selected = Singleton<Studio.Studio>.Instance?.treeNodeCtrl.selectObjectCtrl;
+                    if (selected != null && selected.Length == 1) partner_nodes[i] = selected[0];
+                    else ShowMessage("Select exactly one node in the Studio workspace first.");
+                }
+                if (GUILayout.Button("clear")) partner_nodes[i] = null;
+                GUILayout.EndHorizontal();
+            }
+            if (GUILayout.Button("save to scene card"))
+            {
+                // 新建還沒存過的場景沒有卡片路徑，存了也不知道要寫到哪
+                if (scene_path == "no") ShowMessage("Load a scene card first.");
+                else RequestProfileSave();
+            }
+            GUILayout.EndVertical();
+        }
+
         public string FloatToTimeString(float value)
         {
             int minutes = (int)(value / 60);
@@ -444,6 +477,7 @@ namespace KK_osr2_sr6_link
             scene_path = "no";
             cycle = false;
             resampled = true;
+            Array.Clear(partner_nodes, 0, partner_nodes.Length);
             Interlocked.Exchange(ref profile_save_requested, 0);
             profile_save_wait_logged = false;
             // WPF 的 LinkServer.ClearMessage 比對同一個字串
@@ -514,7 +548,7 @@ namespace KK_osr2_sr6_link
         }
 
         // 掃描開始呼叫一次:把一對角色用到的骨頭 Transform 全抓好,取樣迴圈不再每格搜整個場景
-        private BoneSet BuildBoneSet(string femaleRoot, string maleRoot)
+        private BoneSet BuildBoneSet(string femaleRoot)
         {
             return new BoneSet
             {
@@ -534,12 +568,64 @@ namespace KK_osr2_sr6_link
                 hand1R = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_ind_R")),
                 hand2R = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_mid_R")),
                 vagina = GameObject.Find(FindRootObjectPath(femaleRoot, "a_n_kokan")),
-                penis = GameObject.Find(FindRootObjectPath(maleRoot, "a_n_dan")),
-                malehips = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_hips")),
-                malethightL = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_L")),
-                malethightR = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_R")),
-                malehead = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_head")),
             };
+        }
+
+        private void SetMaleBones(BoneSet bs, string maleRoot)
+        {
+            bs.penis = GameObject.Find(FindRootObjectPath(maleRoot, "a_n_dan"));
+            bs.malehips = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_hips"));
+            bs.malethightL = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_L"));
+            bs.malethightR = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_thigh00_R"));
+            bs.malehead = GameObject.Find(FindRootObjectPath(maleRoot, "cf_j_head"));
+        }
+
+        private static void SetPartnerBones(BoneSet bs)
+        {
+            bs.penis = NodeTransform(partner_nodes[0]).gameObject;
+            bs.malehips = NodeTransform(partner_nodes[1]).gameObject;
+            bs.malethightL = NodeTransform(partner_nodes[2]).gameObject;
+            bs.malethightR = NodeTransform(partner_nodes[3]).gameObject;
+            bs.malehead = NodeTransform(partner_nodes[4]).gameObject;
+        }
+
+        private void AddPair(string charas_name, BoneSet bones)
+        {
+            Action_data data = new Action_data();
+            data.charas_name = charas_name;
+            data.inserts = new List<float>();
+            data.surges = new List<float>();
+            data.sways = new List<float>();
+            data.twists = new List<float>();
+            data.rolls = new List<float>();
+            data.pitchs = new List<float>();
+            data.blowjob_inserts = new List<float>();
+            data.blowjob_surges = new List<float>();
+            data.blowjob_sways = new List<float>();
+            data.blowjob_twists = new List<float>();
+            data.blowjob_rolls = new List<float>();
+            data.blowjob_pitchs = new List<float>();
+            data.breastsex_inserts = new List<float>();
+            data.breastsex_surges = new List<float>();
+            data.breastsex_sways = new List<float>();
+            data.breastsex_twists = new List<float>();
+            data.breastsex_rolls = new List<float>();
+            data.breastsex_pitchs = new List<float>();
+            data.handjobL_inserts = new List<float>();
+            data.handjobL_surges = new List<float>();
+            data.handjobL_sways = new List<float>();
+            data.handjobL_twists = new List<float>();
+            data.handjobL_rolls = new List<float>();
+            data.handjobL_pitchs = new List<float>();
+            data.handjobR_inserts = new List<float>();
+            data.handjobR_surges = new List<float>();
+            data.handjobR_sways = new List<float>();
+            data.handjobR_twists = new List<float>();
+            data.handjobR_rolls = new List<float>();
+            data.handjobR_pitchs = new List<float>();
+            data.bodywidths = new List<float>();
+            action_list.Add(data);
+            bone_cache[charas_name] = bones;
         }
 
         public float[] Dis_angle_blowjob(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, Vector3 p5, Vector3 p6, Vector3 p7) //penis mouth earL earR head maleL maleR.
@@ -837,46 +923,29 @@ namespace KK_osr2_sr6_link
                 bone_cache.Clear();
                 foreach (KeyValuePair<GameObject, String> female_chara in female_charas)
                 {
+                    string female_label = $"{female_chara.Value}({female_chara.Key.name})";
                     foreach (KeyValuePair<GameObject, String> male_chara in male_charas)
                     {
-                        Action_data data = new Action_data();
-                        data.charas_name = $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})";
-                        data.inserts = new List<float>();
-                        data.surges = new List<float>();
-                        data.sways = new List<float>();
-                        data.twists = new List<float>();
-                        data.rolls = new List<float>();
-                        data.pitchs = new List<float>();
-                        data.blowjob_inserts = new List<float>();
-                        data.blowjob_surges = new List<float>();
-                        data.blowjob_sways = new List<float>();
-                        data.blowjob_twists = new List<float>();
-                        data.blowjob_rolls = new List<float>();
-                        data.blowjob_pitchs = new List<float>();
-                        data.breastsex_inserts = new List<float>();
-                        data.breastsex_surges = new List<float>();
-                        data.breastsex_sways = new List<float>();
-                        data.breastsex_twists = new List<float>();
-                        data.breastsex_rolls = new List<float>();
-                        data.breastsex_pitchs = new List<float>();
-                        data.handjobL_inserts = new List<float>();
-                        data.handjobL_surges = new List<float>();
-                        data.handjobL_sways = new List<float>();
-                        data.handjobL_twists = new List<float>();
-                        data.handjobL_rolls = new List<float>();
-                        data.handjobL_pitchs = new List<float>();
-                        data.handjobR_inserts = new List<float>();
-                        data.handjobR_surges = new List<float>();
-                        data.handjobR_sways = new List<float>();
-                        data.handjobR_twists = new List<float>();
-                        data.handjobR_rolls = new List<float>();
-                        data.handjobR_pitchs = new List<float>();
-                        data.bodywidths = new List<float>();
-                        action_list.Add(data);
-                        bone_cache[data.charas_name] = BuildBoneSet(female_chara.Key.name, male_chara.Key.name);
+                        BoneSet bones = BuildBoneSet(female_chara.Key.name);
+                        SetMaleBones(bones, male_chara.Key.name);
+                        AddPair($"{female_label}-{male_chara.Value}({male_chara.Key.name})", bones);
+                    }
+                    if (PartnerReady())
+                    {
+                        BoneSet bones = BuildBoneSet(female_chara.Key.name);
+                        SetPartnerBones(bones);
+                        AddPair($"{female_label}-{partner_nodes[0].treeNodeObject.textName}({PartnerRoot})", bones);
                     }
                 }
                 play_times.Clear();
+                // 女角只跟男角或自訂男方配對；沒有配對時掃完只會寫出空檔，還會蓋掉舊資料
+                if (action_list.Count == 0)
+                {
+                    StopSampling();
+                    Logger.LogWarning($"sampling stopped: no pair (female={female_charas.Count}, male={male_charas.Count}, partner={PartnerReady()})");
+                    ShowMessage("Sampling needs a female character plus a male character or a complete custom partner. The previous data was kept.");
+                    return;
+                }
             }
             Logger.LogInfo("playbackTime:" + Timeline.Timeline.playbackTime);
             if (Math.Round(last_playtime, 3) != Math.Round(Timeline.Timeline.playbackTime, 3))
@@ -894,125 +963,112 @@ namespace KK_osr2_sr6_link
             play_times.Add(Math.Round(last_playtime, 3));
             if (scanning_mode == 0)
             {
-                foreach (KeyValuePair<GameObject, String> female_chara in female_charas)
+                foreach (Action_data data in action_list)
                 {
-                    female = female_chara.Key.name;
-                    femaleRoot = female_chara.Key;
-                    foreach (KeyValuePair<GameObject, String> male_chara in male_charas)
+                    BoneSet bs = bone_cache[data.charas_name];   // 掃描開始時已抓好,這裡不再搜場景
+                    femalehead = bs.head;
+                    femalethightL = bs.thightL;
+                    femalethightR = bs.thightR;
+                    femalehips = bs.hips;
+                    femaleearL = bs.earL;
+                    femaleearR = bs.earR;
+                    femalemouth = bs.mouth;
+                    femalebreastL = bs.breastL;
+                    femalebreastR = bs.breastR;
+                    femalehand0L = bs.hand0L;
+                    femalehand1L = bs.hand1L;
+                    femalehand2L = bs.hand2L;
+                    femalehand0R = bs.hand0R;
+                    femalehand1R = bs.hand1R;
+                    femalehand2R = bs.hand2R;
+                    vagina = bs.vagina;
+                    penis = bs.penis;
+                    malehips = bs.malehips;
+                    malethightL = bs.malethightL;
+                    malethightR = bs.malethightR;
+                    malehead = bs.malehead;
+
+                    Vector3 offset = penis.transform.position - vagina.transform.position;
+
+                    Vector3 _vagina = vagina.transform.position + offset;
+                    Vector3 _femalehps = femalehips.transform.position + offset;
+                    Vector3 __vagina = (femalethightL.transform.position + femalethightR.transform.position) / 2 + offset;
+
+
+                    // L0 inverted at source: the app derives L0 by range-normalizing this
+                    // insert distance, so negating it flips the axis direction (out<->in).
+                    float dis = -Vector3.Distance(penis.transform.position, vagina.transform.position);
+                    float[] postiton = Get_position(vagina.transform.position, penis.transform.position, malethightL.transform.position, malethightR.transform.position);
+                    float surge = postiton[0];
+                    float sway = postiton[1];
+                    float twist_angle = Twist_angle(femalethightL.transform.position, femalethightR.transform.position, penis.transform.position, malethightL.transform.position, malethightR.transform.position);
+                    float roll_angle = Roll_angle(__vagina, _femalehps, malethightL.transform.position, malethightR.transform.position);
+                    float pitch_angle = Pitch_angle(_vagina, _femalehps, malethightL.transform.position, malethightR.transform.position);
+
+                    float[] blowjob = Dis_angle_blowjob(penis.transform.position, femalemouth.transform.position, femaleearL.transform.position, femaleearR.transform.position, femalehead.transform.position, malethightL.transform.position, malethightR.transform.position);
+                    float[] breastsex = Dis_angle_breastsex(penis.transform.position, femalethightL.transform.position, femalethightR.transform.position, femalehead.transform.position, malethightL.transform.position, malethightR.transform.position, femalebreastL.transform.position, femalebreastR.transform.position);
+                    float[] handjobL = Dis_angle_handjob(penis.transform.position, femalehand0L.transform.position, femalehand1L.transform.position, femalehand2L.transform.position, malethightL.transform.position, malethightR.transform.position);
+                    float[] handjobR = Dis_angle_handjob(penis.transform.position, femalehand0R.transform.position, femalehand1R.transform.position, femalehand2R.transform.position, malethightL.transform.position, malethightR.transform.position);
+                    float blowjob_insert = -blowjob[0]; // L0 inverted at source (see dis)
+                    float blowjob_surge = blowjob[1];
+                    float blowjob_sway = blowjob[2];
+                    float blowjob_twist = blowjob[3];
+                    float blowjob_roll = blowjob[4];
+                    float blowjob_pitch = blowjob[5];
+                    float breastsex_insert = -breastsex[0]; // L0 inverted at source (see dis)
+                    float breastsex_surge = breastsex[1];
+                    float breastsex_sway = breastsex[2];
+                    float breastsex_twist = breastsex[3];
+                    float breastsex_roll = breastsex[4];
+                    float breastsex_pitch = breastsex[5];
+                    float handjobL_insert = -handjobL[0]; // L0 inverted at source (see dis)
+                    float handjobL_surge = handjobL[1];
+                    float handjobL_sway = handjobL[2];
+                    float handjobL_twist = handjobL[3];
+                    float handjobL_roll = handjobL[4];
+                    float handjobL_pitch = handjobL[5];
+                    float handjobR_insert = -handjobR[0]; // L0 inverted at source (see dis)
+                    float handjobR_surge = handjobR[1];
+                    float handjobR_sway = handjobR[2];
+                    float handjobR_twist = handjobR[3];
+                    float handjobR_roll = handjobR[4];
+                    float handjobR_pitch = handjobR[5];
+                    float bodywidth = Vector3.Distance(femalethightL.transform.position, femalethightR.transform.position) * 3;
+                    if (pitch_angle < 0) { surge = -surge; }
+                    if (roll_angle < 0) { sway = -sway; }
+                    if (!cycle)
                     {
-                        male = male_chara.Key.name;
-                        maleRoot = male_chara.Key;
-                        foreach (Action_data data in action_list)
-                        {
-                            if (data.charas_name == $"{female_chara.Value}({female_chara.Key.name})-{male_chara.Value}({male_chara.Key.name})")
-                            {
-                                BoneSet bs = bone_cache[data.charas_name];   // 掃描開始時已抓好,這裡不再搜場景
-                                femalehead = bs.head;
-                                femalethightL = bs.thightL;
-                                femalethightR = bs.thightR;
-                                femalehips = bs.hips;
-                                femaleearL = bs.earL;
-                                femaleearR = bs.earR;
-                                femalemouth = bs.mouth;
-                                femalebreastL = bs.breastL;
-                                femalebreastR = bs.breastR;
-                                femalehand0L = bs.hand0L;
-                                femalehand1L = bs.hand1L;
-                                femalehand2L = bs.hand2L;
-                                femalehand0R = bs.hand0R;
-                                femalehand1R = bs.hand1R;
-                                femalehand2R = bs.hand2R;
-                                vagina = bs.vagina;
-                                penis = bs.penis;
-                                malehips = bs.malehips;
-                                malethightL = bs.malethightL;
-                                malethightR = bs.malethightR;
-                                malehead = bs.malehead;
-
-                                Vector3 offset = penis.transform.position - vagina.transform.position;
-
-                                Vector3 _vagina = vagina.transform.position + offset;
-                                Vector3 _femalehps = femalehips.transform.position + offset;
-                                Vector3 __vagina = (femalethightL.transform.position + femalethightR.transform.position) / 2 + offset;
-
-
-                                // L0 inverted at source: the app derives L0 by range-normalizing this
-                                // insert distance, so negating it flips the axis direction (out<->in).
-                                float dis = -Vector3.Distance(penis.transform.position, vagina.transform.position);
-                                float[] postiton = Get_position(vagina.transform.position, penis.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float surge = postiton[0];
-                                float sway = postiton[1];
-                                float twist_angle = Twist_angle(femalethightL.transform.position, femalethightR.transform.position, penis.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float roll_angle = Roll_angle(__vagina, _femalehps, malethightL.transform.position, malethightR.transform.position);
-                                float pitch_angle = Pitch_angle(_vagina, _femalehps, malethightL.transform.position, malethightR.transform.position);
-
-                                float[] blowjob = Dis_angle_blowjob(penis.transform.position, femalemouth.transform.position, femaleearL.transform.position, femaleearR.transform.position, femalehead.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float[] breastsex = Dis_angle_breastsex(penis.transform.position, femalethightL.transform.position, femalethightR.transform.position, femalehead.transform.position, malethightL.transform.position, malethightR.transform.position, femalebreastL.transform.position, femalebreastR.transform.position);
-                                float[] handjobL = Dis_angle_handjob(penis.transform.position, femalehand0L.transform.position, femalehand1L.transform.position, femalehand2L.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float[] handjobR = Dis_angle_handjob(penis.transform.position, femalehand0R.transform.position, femalehand1R.transform.position, femalehand2R.transform.position, malethightL.transform.position, malethightR.transform.position);
-                                float blowjob_insert = -blowjob[0]; // L0 inverted at source (see dis)
-                                float blowjob_surge = blowjob[1];
-                                float blowjob_sway = blowjob[2];
-                                float blowjob_twist = blowjob[3];
-                                float blowjob_roll = blowjob[4];
-                                float blowjob_pitch = blowjob[5];
-                                float breastsex_insert = -breastsex[0]; // L0 inverted at source (see dis)
-                                float breastsex_surge = breastsex[1];
-                                float breastsex_sway = breastsex[2];
-                                float breastsex_twist = breastsex[3];
-                                float breastsex_roll = breastsex[4];
-                                float breastsex_pitch = breastsex[5];
-                                float handjobL_insert = -handjobL[0]; // L0 inverted at source (see dis)
-                                float handjobL_surge = handjobL[1];
-                                float handjobL_sway = handjobL[2];
-                                float handjobL_twist = handjobL[3];
-                                float handjobL_roll = handjobL[4];
-                                float handjobL_pitch = handjobL[5];
-                                float handjobR_insert = -handjobR[0]; // L0 inverted at source (see dis)
-                                float handjobR_surge = handjobR[1];
-                                float handjobR_sway = handjobR[2];
-                                float handjobR_twist = handjobR[3];
-                                float handjobR_roll = handjobR[4];
-                                float handjobR_pitch = handjobR[5];
-                                float bodywidth = Vector3.Distance(femalethightL.transform.position, femalethightR.transform.position) * 3;
-                                if (pitch_angle < 0) { surge = -surge; }
-                                if (roll_angle < 0) { sway = -sway; }
-                                if (!cycle)
-                                {
-                                    data.inserts.Add(dis);
-                                    data.surges.Add(surge);
-                                    data.sways.Add(sway);
-                                    data.twists.Add(twist_angle);
-                                    data.rolls.Add(roll_angle);
-                                    data.pitchs.Add(pitch_angle);
-                                    data.blowjob_inserts.Add(blowjob_insert);
-                                    data.blowjob_surges.Add(blowjob_surge);
-                                    data.blowjob_sways.Add(blowjob_sway);
-                                    data.blowjob_twists.Add(blowjob_twist);
-                                    data.blowjob_rolls.Add(blowjob_roll);
-                                    data.blowjob_pitchs.Add(blowjob_pitch);
-                                    data.breastsex_inserts.Add(breastsex_insert);
-                                    data.breastsex_surges.Add(breastsex_surge);
-                                    data.breastsex_sways.Add(breastsex_sway);
-                                    data.breastsex_twists.Add(breastsex_twist);
-                                    data.breastsex_rolls.Add(breastsex_roll);
-                                    data.breastsex_pitchs.Add(breastsex_pitch);
-                                    data.handjobL_inserts.Add(handjobL_insert);
-                                    data.handjobL_surges.Add(handjobL_surge);
-                                    data.handjobL_sways.Add(handjobL_sway);
-                                    data.handjobL_twists.Add(handjobL_twist);
-                                    data.handjobL_rolls.Add(handjobL_roll);
-                                    data.handjobL_pitchs.Add(handjobL_pitch);
-                                    data.handjobR_inserts.Add(handjobR_insert);
-                                    data.handjobR_surges.Add(handjobR_surge);
-                                    data.handjobR_sways.Add(handjobR_sway);
-                                    data.handjobR_twists.Add(handjobR_twist);
-                                    data.handjobR_rolls.Add(handjobR_roll);
-                                    data.handjobR_pitchs.Add(handjobR_pitch);
-                                    data.bodywidths.Add(bodywidth);
-                                }
-                            }
-                        }
+                        data.inserts.Add(dis);
+                        data.surges.Add(surge);
+                        data.sways.Add(sway);
+                        data.twists.Add(twist_angle);
+                        data.rolls.Add(roll_angle);
+                        data.pitchs.Add(pitch_angle);
+                        data.blowjob_inserts.Add(blowjob_insert);
+                        data.blowjob_surges.Add(blowjob_surge);
+                        data.blowjob_sways.Add(blowjob_sway);
+                        data.blowjob_twists.Add(blowjob_twist);
+                        data.blowjob_rolls.Add(blowjob_roll);
+                        data.blowjob_pitchs.Add(blowjob_pitch);
+                        data.breastsex_inserts.Add(breastsex_insert);
+                        data.breastsex_surges.Add(breastsex_surge);
+                        data.breastsex_sways.Add(breastsex_sway);
+                        data.breastsex_twists.Add(breastsex_twist);
+                        data.breastsex_rolls.Add(breastsex_roll);
+                        data.breastsex_pitchs.Add(breastsex_pitch);
+                        data.handjobL_inserts.Add(handjobL_insert);
+                        data.handjobL_surges.Add(handjobL_surge);
+                        data.handjobL_sways.Add(handjobL_sway);
+                        data.handjobL_twists.Add(handjobL_twist);
+                        data.handjobL_rolls.Add(handjobL_roll);
+                        data.handjobL_pitchs.Add(handjobL_pitch);
+                        data.handjobR_inserts.Add(handjobR_insert);
+                        data.handjobR_surges.Add(handjobR_surge);
+                        data.handjobR_sways.Add(handjobR_sway);
+                        data.handjobR_twists.Add(handjobR_twist);
+                        data.handjobR_rolls.Add(handjobR_roll);
+                        data.handjobR_pitchs.Add(handjobR_pitch);
+                        data.bodywidths.Add(bodywidth);
                     }
                 }
                 string fileDir = Path.GetDirectoryName(filePath);
@@ -1177,94 +1233,21 @@ namespace KK_osr2_sr6_link
             }
             else if (way == 2)
             {
-                string chara = get[1];
-                int rootStart = chara.IndexOf("chaF_");
-                if (rootStart == -1)
-                {
-                    rootStart = chara.IndexOf("chaM_");
-                    if (rootStart == -1)
-                    {
-                        Logger.LogInfo("cannot find chaF_ or chaM_");
-                        return;
-                    }
-                }
-
-                if (rootStart + 8 > chara.Length)
-                {
-                    Logger.LogInfo("chara data Error");
-                    return;
-                }
-                string chara_root = chara.Substring(rootStart, 8);
-
-                GameObject chara_object = GameObject.Find(chara_root);
-                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                if (guideObjectManager != null && chara_object != null)
-                {
-                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                    GuideObject chara_guideObject = dicGuideObject[chara_object.transform];
-                    GuideBase[] chara_guide = Traverse.Create(chara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                    GuideSelect chara_guideSelect = chara_guide[11] as GuideSelect;
-                    chara_guideSelect.treeNodeObject.Select();
-                    chara_guideSelect = null;
-                }
-
+                string chara_root = FindRoot(get[1], "chaF_", "chaM_", "chaP_");
+                TreeNodeObject node = chara_root == null ? null : FindTreeNode(chara_root);
+                if (node == null) { Logger.LogInfo("chara not found: " + get[1]); return; }
+                node.Select();
             }
-            else if (way == 3)
+            else if (way == 3 || way == 4)
             {
                 string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
-                int femaleRootStart = charas.IndexOf("chaF_");
-                if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
-                string femalechara_root = charas.Substring(femaleRootStart, 8);
-
-                int maleRootStart = charas.IndexOf("chaM_");
-                if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
-                string malechara_root = charas.Substring(maleRootStart, 8);
-                GameObject femalechara_object = GameObject.Find(femalechara_root);
-                GameObject malechara_object = GameObject.Find(malechara_root);
-                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
-                {
-                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                    GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
-                    GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
-                    GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                    GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                    GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
-                    GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
-                    femalechara_guideSelect.treeNodeObject.SetVisible(true);
-                    malechara_guideSelect.treeNodeObject.SetVisible(true);
-                    femalechara_guideSelect = null;
-                    malechara_guideSelect = null;
-                }
-            }
-
-            else if (way == 4)
-            {
-                string charas = get[1];//Kyoka Jiro(chaF_001)-Haruno Chika(chaM_001)
-                int femaleRootStart = charas.IndexOf("chaF_");
-                if (femaleRootStart == -1) { Logger.LogInfo("chaF_ not found in input."); return; }
-                string femalechara_root = charas.Substring(femaleRootStart, 8);
-
-                int maleRootStart = charas.IndexOf("chaM_");
-                if (maleRootStart == -1) { Logger.LogInfo("chaM_ not found in input."); return; }
-                string malechara_root = charas.Substring(maleRootStart, 8);
-                GameObject femalechara_object = GameObject.Find(femalechara_root);
-                GameObject malechara_object = GameObject.Find(malechara_root);
-                Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
-                if (guideObjectManager != null && femalechara_object != null && malechara_object != null)
-                {
-                    Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
-                    GuideObject femalechara_guideObject = dicGuideObject[femalechara_object.transform];
-                    GuideObject malechara_guideObject = dicGuideObject[malechara_object.transform];
-                    GuideBase[] femalechara_guide = Traverse.Create(femalechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                    GuideBase[] malechara_guide = Traverse.Create(malechara_guideObject).Field("guide").GetValue<GuideBase[]>();
-                    GuideSelect femalechara_guideSelect = femalechara_guide[11] as GuideSelect;
-                    GuideSelect malechara_guideSelect = malechara_guide[11] as GuideSelect;
-                    femalechara_guideSelect.treeNodeObject.SetVisible(false);
-                    malechara_guideSelect.treeNodeObject.SetVisible(false);
-                    femalechara_guideSelect = null;
-                    malechara_guideSelect = null;
-                }
+                string female_root = FindRoot(charas, "chaF_");
+                string male_root = FindRoot(charas, "chaM_", "chaP_");
+                TreeNodeObject female_node = female_root == null ? null : FindTreeNode(female_root);
+                TreeNodeObject male_node = male_root == null ? null : FindTreeNode(male_root);
+                if (female_node == null || male_node == null) { Logger.LogInfo("pair not found: " + charas); return; }
+                female_node.SetVisible(way == 3);
+                male_node.SetVisible(way == 3);
             }
             else if (way == 5)
             {
@@ -1281,6 +1264,35 @@ namespace KK_osr2_sr6_link
                     Logger.LogInfo("profile command 5 accepted; card save queued");
                 }
             }
+        }
+
+        // 從「名字(chaF_001)-名字(chaM_001)」這類字串取出 8 個字元的 root，前綴照順序找
+        private static string FindRoot(string text, params string[] prefixes)
+        {
+            foreach (string prefix in prefixes)
+            {
+                int start = text.IndexOf(prefix);
+                if (start >= 0 && start + 8 <= text.Length) return text.Substring(start, 8);
+            }
+            return null;
+        }
+
+        // chaP_ 沒有角色物件可找，改用陰莖節點最上層的父節點代表整個自訂男方
+        private static TreeNodeObject FindTreeNode(string root)
+        {
+            if (root == PartnerRoot)
+            {
+                if (!PartnerReady()) return null;
+                TreeNodeObject node = partner_nodes[0].treeNodeObject;
+                while (node.parent != null) node = node.parent;
+                return node;
+            }
+            GameObject chara_object = GameObject.Find(root);
+            Studio.GuideObjectManager guideObjectManager = Singleton<Studio.GuideObjectManager>.Instance;
+            if (guideObjectManager == null || chara_object == null) return null;
+            Dictionary<Transform, GuideObject> dicGuideObject = Traverse.Create(guideObjectManager).Field("dicGuideObject").GetValue<Dictionary<Transform, GuideObject>>();
+            GuideBase[] chara_guide = Traverse.Create(dicGuideObject[chara_object.transform]).Field("guide").GetValue<GuideBase[]>();
+            return (chara_guide[11] as GuideSelect).treeNodeObject;
         }
 
         void OnDestroy()

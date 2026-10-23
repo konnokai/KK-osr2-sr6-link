@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using ExtensibleSaveFormat;
@@ -22,6 +23,8 @@ namespace KK_osr2_sr6_link
     {
         public const string DataId = "org.bepinex.plugins.osr2_sr6_link.scene-profile";
         private const string ProfileKeyField = "profileKey";
+        // 自訂男方 5 個位置的場景 ID，用逗號隔開，-1 表示沒指定
+        private const string PartnerField = "partnerIds";
         private static bool registered;
         private static string redirectScenePath = "";
 
@@ -71,35 +74,60 @@ namespace KK_osr2_sr6_link
             }
 
             PluginData data = GetExtendedData();
+            bool readable = data != null && data.version == 1 && data.data != null;
             string key = "";
             object value;
-            if (data != null && data.version == 1 && data.data != null && data.data.TryGetValue(ProfileKeyField, out value))
+            if (readable && data.data.TryGetValue(ProfileKeyField, out value))
             {
                 string stored = value as string;
                 if (!string.IsNullOrEmpty(stored) && Osr2_sr6_link.IsValidProfileKey(stored)) key = stored;
             }
             Osr2_sr6_link.TrySetCurrentProfileKey(key);
+            string partner = readable && data.data.TryGetValue(PartnerField, out value) ? value as string : null;
+            LoadPartner(partner, loadedItems);
             Osr2_sr6_link.LogInfo("scene profile load operation=" + operation + " profile=" +
-                (string.IsNullOrEmpty(key) ? "<none>" : key));
+                (string.IsNullOrEmpty(key) ? "<none>" : key) + " partner=" + (partner ?? "<none>"));
             Osr2_sr6_link.SendCurrentSceneMessage();
         }
 
         protected override void OnSceneSave()
         {
             string key = Osr2_sr6_link.CurrentProfileKey;
-            if (string.IsNullOrEmpty(key))
-            {
-                Osr2_sr6_link.LogInfo("scene card metadata save: clearing profile key");
-                SetExtendedData(null);
-                return;
-            }
+            string partner = PartnerIds();
+            Osr2_sr6_link.LogInfo("scene card metadata save: profile=" + (string.IsNullOrEmpty(key) ? "<none>" : key) +
+                " partner=" + (partner ?? "<none>"));
+            var fields = new Dictionary<string, object>();
+            if (!string.IsNullOrEmpty(key)) fields[ProfileKeyField] = key;
+            if (partner != null) fields[PartnerField] = partner;
+            SetExtendedData(fields.Count == 0 ? null : new PluginData { version = 1, data = fields });
+        }
 
-            Osr2_sr6_link.LogInfo("scene card metadata save: profile=" + key);
-            SetExtendedData(new PluginData
+        protected override void OnObjectDeleted(ObjectCtrlInfo objectCtrlInfo)
+        {
+            ObjectCtrlInfo[] nodes = Osr2_sr6_link.partner_nodes;
+            for (int i = 0; i < nodes.Length; i++)
+                if (nodes[i] == objectCtrlInfo) nodes[i] = null;
+        }
+
+        private static string PartnerIds()
+        {
+            ObjectCtrlInfo[] nodes = Osr2_sr6_link.partner_nodes;
+            if (nodes.All(n => n == null)) return null;
+            return string.Join(",", nodes.Select(n => n == null ? "-1" : KKAPI.Studio.StudioObjectExtensions.GetSceneId(n).ToString()).ToArray());
+        }
+
+        // loadedItems 的 key 是存檔當時的 ID，跟現在場景裡的 ID 不一定相同
+        private static void LoadPartner(string ids, ReadOnlyDictionary<int, ObjectCtrlInfo> loadedItems)
+        {
+            ObjectCtrlInfo[] nodes = Osr2_sr6_link.partner_nodes;
+            string[] parts = (ids ?? "").Split(',');
+            for (int i = 0; i < nodes.Length; i++)
             {
-                version = 1,
-                data = new Dictionary<string, object> { { ProfileKeyField, key } },
-            });
+                ObjectCtrlInfo node = null;
+                int id;
+                if (i < parts.Length && int.TryParse(parts[i], out id) && id >= 0) loadedItems.TryGetValue(id, out node);
+                nodes[i] = node;
+            }
         }
 
         [HarmonyPrefix]

@@ -6,7 +6,8 @@ namespace KKOsr2Sr6Link.Wpf.Engine;
 public static class CharacterPair
 {
     private static readonly Regex FemaleRoot = new(@"chaF_[A-Za-z0-9_]+", RegexOptions.Compiled);
-    private static readonly Regex MaleRoot = new(@"chaM_[A-Za-z0-9_]+", RegexOptions.Compiled);
+    // chaP_ 是 plugin 的自訂男方（道具節點），不是 Studio 的角色
+    private static readonly Regex MaleRoot = new(@"cha[MP]_[A-Za-z0-9_]+", RegexOptions.Compiled);
 
     public static bool TryNormalize(string? value, out string key)
     {

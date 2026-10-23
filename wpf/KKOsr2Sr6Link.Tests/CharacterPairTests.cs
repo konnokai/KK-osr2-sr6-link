@@ -21,6 +21,16 @@ public class CharacterPairTests
     }
 
     [Fact]
+    public void CustomPartnerRoot_WorksAsMaleSide()
+    {
+        Assert.Equal("chaF_001-chaP_001", CharacterPair.Normalize("YanHua 4.0 改(chaF_001)-canine(chaP_001)"));
+        Assert.True(CharacterPair.TrySplitLabels(
+            "YanHua 4.0 改(chaF_001)-canine(chaP_001)", out var female, out var male));
+        Assert.Equal("YanHua 4.0 改(chaF_001)", female);
+        Assert.Equal("canine(chaP_001)", male);
+    }
+
+    [Fact]
     public void Normalize_RejectsIncompletePair()
     {
         Assert.False(CharacterPair.TryNormalize("chaF_001-only", out _));
